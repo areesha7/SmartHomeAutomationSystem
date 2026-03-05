@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaCamera, FaEye, FaEyeSlash } from "react-icons/fa";
 import { ArrowLeft } from "lucide-react";
+import Layout from "../Components/Layout";
 
 /* =========================
    OBSERVER PATTERN IMPLEMENTATION
@@ -112,6 +113,7 @@ const Profile = () => {
   const toggleCircle = (checked) => ({ position: "absolute", height: "16px", width: "16px", left: checked ? "22px" : "2px", bottom: "2px", backgroundColor: colors.white, borderRadius: "50%", transition: "0.3s" });
 
   return (
+    <Layout>
     <div className="dashboard-wrapper">
 
       {/* Top Navbar */}
@@ -234,6 +236,7 @@ const Profile = () => {
         @keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
       `}</style>
     </div>
+    </Layout>
   );
 
   function buttonStyle(bgColor) {

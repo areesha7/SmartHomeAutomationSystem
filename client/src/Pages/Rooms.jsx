@@ -1,5 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import Layout from "../Components/Layout";
 
 /* Import icons from lucide-react */
 import {
@@ -105,6 +106,7 @@ const Rooms = () => {
   const navigate = useNavigate();
 
   return (
+    <Layout>
     <div className="rooms-wrapper">
 
       {/* ================= NAVBAR ================= */}
@@ -241,6 +243,7 @@ const Rooms = () => {
       `}</style>
 
     </div>
+    </Layout>
   );
 };
 
