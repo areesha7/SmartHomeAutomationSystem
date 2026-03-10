@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import "../styles/theme.css";
+import logo from "../assets/logoHomi.jpeg";
 
 export default function Login() {
   // -----------------------------
@@ -33,7 +34,7 @@ export default function Login() {
             Left side: logo or branding
         ----------------------------- */}
         <div className="form-left">
-          <img src="/logo.png" alt="logo" />
+          <img src={logo} alt="logo" />
         </div>
 
         {/* -----------------------------

@@ -4,9 +4,9 @@ import { FaCamera, FaEye, FaEyeSlash } from "react-icons/fa";
 import { ArrowLeft } from "lucide-react";
 import Layout from "../Components/Layout";
 
-/* =========================
+/* 
    OBSERVER PATTERN IMPLEMENTATION
-   ========================= */
+    */
 
 class ProfileManager {
   constructor(initialData) {
@@ -44,9 +44,9 @@ class ProfileManager {
   }
 }
 
-/* =========================
+/* 
    DEFAULT DATA
-   ========================= */
+    */
 
 const defaultProfile = {
   name: "Alex Johnson",
@@ -73,9 +73,9 @@ const initialData = {
   profileImage: null,
 };
 
-/* =========================
+/* 
    PROFILE COMPONENT
-   ========================= */
+    */
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -117,15 +117,15 @@ const Profile = () => {
     <div className="dashboard-wrapper">
 
       {/* Top Navbar */}
-      <nav className="navbar shadow-sm" style={{ backgroundColor: primaryColor }}>
+      <nav className="navbar">
         <div className="container-fluid d-flex align-items-center justify-content-between">
           <div className="d-flex align-items-center">
-            <button className="btn btn-sm me-2 text-white" onClick={() => navigate("/dashboard")} style={{ background: "transparent", border: "none", fontSize: "1.5rem" }}>
+            <button className="btn btn-sm me-2 text-white" onClick={() => navigate("/")} style={{ background: "transparent", border: "none", fontSize: "1.5rem", backgroundColor: primaryColor }}>
               <ArrowLeft size={24} />
             </button>
             <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
-              <span style={{ fontSize: "20px", fontWeight: "bold", color: "#fff" }}>Profile Settings</span>
-              <span style={{ fontSize: "14px", color: "#f0f0f0" }}>Manage Account</span>
+              <span style={{ fontSize: "20px", fontWeight: "bold", color: "#63a17f" }}>Profile Settings</span>
+              <span style={{ fontSize: "14px", color: "#63a17f" }}>Manage Account</span>
             </div>
           </div>
         </div>

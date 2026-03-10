@@ -1,0 +1,136 @@
+:root {
+  --card-color: #CDCC58; /* floating card */
+  --dark-button: #7B61FF; /* main action button */
+  --dark-google: #63a17f; /* Google button */
+  --white: #ffffff;
+  --input-bg: #ffffff;
+  --text-black: #000000;
+}
+
+/* Reset */
+body {
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--white);
+}
+
+/* Container: left logo + right form */
+.form-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  gap: 50px;
+  padding: 20px;
+}
+
+/* Left: Logo */
+.form-left {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.form-left img {
+  width: 250px;
+  max-width: 80%;
+  border-radius: 10px;
+}
+
+/* Right: Form card */
+.form-right {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.form-card {
+  background-color: var(--card-color);
+  padding: 40px;
+  border-radius: 20px;
+  width: 320px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+/* Titles */
+.form-card h2 {
+  color: var(--text-black);
+  margin-bottom: 20px;
+}
+
+/* Inputs */
+.form-card input {
+  width: 100%;
+  padding: 12px;
+  margin: 10px 0;
+  border-radius: 25px;
+  border: 1px solid #ccc;
+  background: var(--input-bg);
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+/* Buttons */
+.button-primary {
+  width: 90%;
+  padding: 12px;
+  border: none;
+  border-radius: 25px;
+  background-color: var(--dark-button);
+  color: var(--white);
+  font-weight: bold;
+  cursor: pointer;
+  margin: 12px 0;
+}
+
+.button-google {
+  width: 90%;
+  padding: 12px;
+  border: none;
+  border-radius: 25px;
+  background-color: var(--dark-google);
+  color: var(--white);
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.button-google img {
+  width: 20px;
+  margin-right: 10px;
+}
+
+/* Links */
+.form-links {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-black);
+}
+
+.form-links a {
+  color: var(--text-black);
+  text-decoration: underline;
+}
+
+/* Responsive for Mobile */
+@media (max-width: 768px) {
+  .form-container {
+    flex-direction: column;
+    gap: 30px;
+  }
+
+  .form-left,
+  .form-right {
+    flex: unset;
+    width: 100%;
+  }
+}

@@ -1,6 +1,7 @@
 import React from "react"; // Import React to use JSX
 import "../styles/theme.css"; // Import global CSS styles
 import { Link } from "react-router-dom"; // Import Link for routing between pages
+import logo from "../assets/logoHomi.jpeg"; 
 
 // Functional component for Signup page
 export default function Signup() {
@@ -10,7 +11,7 @@ export default function Signup() {
 
         {/* Left section: logo or image */}
         <div className="form-left">
-          <img src="/logo.png" alt="logo" /> {/* App logo */}
+          <img src={logo} alt="logo" /> {/* App logo */}
         </div>
 
         {/* Right section: Signup form */}
