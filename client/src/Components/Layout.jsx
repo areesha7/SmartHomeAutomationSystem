@@ -116,6 +116,9 @@ const Layout = ({ children }) => {
             <li className="nav-item mb-2">
               <Link to="/profile" className="nav-link text-white custom-nav-link">Profile</Link>
             </li>
+            <li className="nav-item mb-2">
+  <Link to="/modeling" className="nav-link text-white custom-nav-link">Modeling</Link>
+</li>
           </ul>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>

@@ -13,6 +13,7 @@ import Notifications  from "./Pages/Notifications";
 import Login          from "./Pages/Login";
 import Signup         from "./Pages/Signup";
 import CreateHome     from "./Pages/Createhome";
+import ModelingSimulation from "./Pages/ModelingSimulation";
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated } = useAuth();
@@ -22,18 +23,19 @@ const ProtectedRoute = ({ children }) => {
 function App() {
   return (
     <Routes>
-      <Route path="/login"       element={<Login />}   />
-      <Route path="/signup"      element={<Signup />}  />
+      <Route path="/login" element={<Login />}   />
+      <Route path="/signup" element={<Signup />}  />
 
-      <Route path="/"              element={<ProtectedRoute><Dashboard /></ProtectedRoute>}    />
-      <Route path="/rooms"         element={<ProtectedRoute><Rooms /></ProtectedRoute>}        />
-      <Route path="/rooms/:id"     element={<ProtectedRoute><RoomDetail /></ProtectedRoute>}   />
-      <Route path="/automations"   element={<ProtectedRoute><Automations /></ProtectedRoute>}  />
-      <Route path="/profile"       element={<ProtectedRoute><Profile /></ProtectedRoute>}      />
-      <Route path="/analytics"     element={<ProtectedRoute><Analytics /></ProtectedRoute>}    />
-      <Route path="/settings"      element={<ProtectedRoute><Settings /></ProtectedRoute>}     />
+      <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}    />
+      <Route path="/rooms"  element={<ProtectedRoute><Rooms /></ProtectedRoute>}        />
+      <Route path="/rooms/:id" element={<ProtectedRoute><RoomDetail /></ProtectedRoute>}   />
+      <Route path="/automations" element={<ProtectedRoute><Automations /></ProtectedRoute>}  />
+      <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>}      />
+      <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>}    />
+      <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>}     />
       <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>}/>
-      <Route path="/create-home"   element={<ProtectedRoute><CreateHome /></ProtectedRoute>}   />
+      <Route path="/create-home" element={<ProtectedRoute><CreateHome /></ProtectedRoute>}   />
+      <Route path="/modeling" element={<ProtectedRoute><ModelingSimulation /></ProtectedRoute>} />
     </Routes>
   );
 }

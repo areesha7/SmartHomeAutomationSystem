@@ -17,9 +17,6 @@
  *                      lastLogin: null) ensure callers never need null-checks.
  */
 
-const dns = require('dns');
-dns.setServers(['8.8.8.8', '8.8.4.4']);
-
 const mongoose = require('mongoose');
 const bcrypt   = require('bcryptjs');
 const { bcryptSaltRounds } = require('../config/auth');
