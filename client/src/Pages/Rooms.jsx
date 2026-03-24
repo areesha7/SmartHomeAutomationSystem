@@ -1,532 +1,276 @@
-import React, { useState } from "react";
+
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import Layout from "../Components/Layout";
-
 import {
-  Thermometer,
-  Droplets,
-  ArrowLeft,
-  Sofa,
-  ChefHat,
-  Bed,
-  Bath,
-  Briefcase,
-  Car,
-  Plus,
-  Trash2,
-  X
+  Sofa, ChefHat, Bed, Bath, Briefcase, Car,
+  Home, RotateCcw, Wifi, WifiOff, Plus, X
 } from "lucide-react";
+import Layout from "../Components/Layout";
+import { useAuth } from "../context/AuthContext";
 
+const BASE_URL = "http://localhost:5000";
 
-/* =====================================================
+const apiFetch = async (path, token, options = {}) => {
+  const storedToken = token || localStorage.getItem("token");
+  if (!storedToken) throw new Error("No auth token");
+  const res = await fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${storedToken}`,
+      ...(options.headers || {}),
+    },
+  });
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  if (res.status === 204) return null;
+  return res.json();
+};
+
+/* 
    FACTORY PATTERN
-   -----------------------------------------------------
-   This class is responsible for creating room objects.
-   Instead of manually writing every room object,
-   we call the factory to generate them.
-
-   Benefit:
-   - Centralized object creation
-   - Easy to add new room types
-   - Cleaner component code
-===================================================== */
+   RoomFactory.fromBackend() maps raw backend room
+   to consistent UI shape. Picks icon from room name.
+ */
+const iconMap = {
+  living: Sofa, kitchen: ChefHat, bedroom: Bed,
+  bathroom: Bath, office: Briefcase, garage: Car,
+  dining: Sofa, guest: Bed, balcony: Car, laundry: Bath,
+};
 
 class RoomFactory {
-
-  static createRoom(id, type, temperature, humidity, devices) {
-
-    const iconMap = {
-      living: Sofa,
-      kitchen: ChefHat,
-      bedroom: Bed,
-      bathroom: Bath,
-      office: Briefcase,
-      garage: Car,
-      dining: Sofa,
-      guest: Bed,
-      balcony: Car,
-      laundry: Bath
-    };
-
-    const nameMap = {
-      living: "Living Room",
-      kitchen: "Kitchen",
-      bedroom: "Bedroom",
-      bathroom: "Bathroom",
-      office: "Home Office",
-      garage: "Garage",
-      dining: "Dining Room",
-      guest: "Guest Room",
-      balcony: "Balcony",
-      laundry: "Laundry Room"
-    };
-
+  static fromBackend(room) {
+    const nameLower = (room.name || "").toLowerCase();
+    const iconKey   = Object.keys(iconMap).find(k => nameLower.includes(k)) || null;
     return {
-      id,
-      name: nameMap[type] || type,
-      icon: iconMap[type] || Sofa,
-      temperature,
-      humidity,
-      devices
+      id:          room.id || room._id,
+      name:        room.name,
+      description: room.description || null,
+      deviceCount: room.deviceCount ?? 0,
+      icon:        iconKey ? iconMap[iconKey] : Home,
     };
   }
 }
 
+const StatusPill = ({ online, loading }) => (
+  <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "600", background: loading ? "#f0f0f0" : online ? "#e8f5ee" : "#fdecea", color: loading ? "#888" : online ? "#63a17f" : "#c03030" }}>
+    {loading ? <RotateCcw size={10} style={{ animation: "spin 1s linear infinite" }} /> : online ? <Wifi size={10} /> : <WifiOff size={10} />}
+    {loading ? "Loading..." : online ? "Live" : "Offline"}
+  </span>
+);
 
-/* =====================================================
-   ROOM DATA
-===================================================== */
-
-const initialRooms = [
-  RoomFactory.createRoom("1","living","23°C","45%",8),
-  RoomFactory.createRoom("2","kitchen","22°C","50%",6),
-  RoomFactory.createRoom("3","bedroom","21°C","42%",5),
-  RoomFactory.createRoom("4","bathroom","24°C","60%",3),
-  RoomFactory.createRoom("5","office","22°C","40%",4),
-  RoomFactory.createRoom("6","garage","19°C","55%",2),
-  RoomFactory.createRoom("7","dining","23°C","48%",4),
-  RoomFactory.createRoom("8","guest","22°C","43%",3),
-  RoomFactory.createRoom("9","balcony","26°C","65%",2),
-  RoomFactory.createRoom("10","laundry","24°C","58%",3),
-];
-
-export const rooms = initialRooms;
-
-const roomTypes = ["living","kitchen","bedroom","bathroom","office","garage","dining","guest","balcony","laundry","other"];
-const deviceTypes = ["Light","Fan","AC","Thermostat","Camera","Smart Plug","TV","Speaker","Sensor","Other"];
-
-
-/* =====================================================
-   ROOMS COMPONENT
-===================================================== */
+const Overlay = ({ onClick }) => (
+  <div onClick={onClick} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000 }} />
+);
 
 const Rooms = () => {
+  const navigate      = useNavigate();
+  const { token, user } = useAuth();
 
-  const navigate = useNavigate();
+  const isAdmin = user?.role === "ADMIN";
 
-  const [roomList,    setRoomList]   = useState(initialRooms);
-  const [showModal,   setShowModal]  = useState(false);
-  const [deleteId,    setDeleteId]   = useState(null);
-  const [newRoom,     setNewRoom]    = useState({ type: "living", customName: "", temperature: "", humidity: "", deviceList: [] });
-  const [deviceInput, setDeviceInput] = useState({ type: "Light", count: "1" });
+  const [homeId,   setHomeId]   = useState(null);
+  const [rooms,    setRooms]    = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [online,   setOnline]   = useState(false);
 
-  const addDeviceEntry = () => {
-    if (!deviceInput.count || Number(deviceInput.count) < 1) return;
-    setNewRoom(r => ({ ...r, deviceList: [...r.deviceList, { type: deviceInput.type, count: Number(deviceInput.count) }] }));
-    setDeviceInput({ type: "Light", count: "1" });
+  const [showModal,   setShowModal]   = useState(false);
+  const [formName,    setFormName]    = useState("");
+  const [formDesc,    setFormDesc]    = useState("");
+  const [submitting,  setSubmitting]  = useState(false);
+  const [formError,   setFormError]   = useState("");
+
+
+  const fetchHomeId = useCallback(async () => {
+    const t = token || localStorage.getItem("token");
+    if (!t) return null;
+    try {
+      const data = await apiFetch("/homes/mine", t);
+      const home = data?.data?.home || data?.home;
+      const id   = home?.id || home?._id;
+      setHomeId(id);
+      return id;
+    } catch { return null; }
+  }, [token]);
+
+
+  const fetchRooms = useCallback(async (id) => {
+    if (!id) { setLoading(false); return; }
+    setLoading(true);
+    const t = token || localStorage.getItem("token");
+    try {
+      const data = await apiFetch(`/rooms/${id}/rooms`, t);
+      const list = data?.data?.rooms || data?.rooms || [];
+      setRooms(list.map(r => RoomFactory.fromBackend(r)));
+      setOnline(true);
+    } catch {
+      setOnline(false);
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    const t = token || localStorage.getItem("token");
+    if (!t) return;
+    const boot = async () => {
+      const id = await fetchHomeId();
+      await fetchRooms(id);
+    };
+    boot();
+  }, [token]);
+
+  const handleAddRoom = async () => {
+    setFormError("");
+    if (!formName.trim()) { setFormError("Room name is required."); return; }
+    if (!homeId)          { setFormError("Could not find your home. Try refreshing."); return; }
+    setSubmitting(true);
+    const t = token || localStorage.getItem("token");
+    try {
+      const data = await apiFetch(`/rooms/${homeId}/rooms`, t, {
+        method: "POST",
+        body:   JSON.stringify({ name: formName.trim(), description: formDesc.trim() || undefined }),
+      });
+      const newRoom = data?.data?.room || data?.room;
+      if (newRoom) setRooms(prev => [...prev, RoomFactory.fromBackend(newRoom)]);
+      setShowModal(false);
+      setFormName("");
+      setFormDesc("");
+    } catch (err) {
+      setFormError(err.message.includes("409") ? "A room with this name already exists." : "Failed to create room. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const removeDeviceEntry = (i) => setNewRoom(r => ({ ...r, deviceList: r.deviceList.filter((_, idx) => idx !== i) }));
 
-  const handleAdd = () => {
-    if (!newRoom.temperature || !newRoom.humidity) return;
-    if (newRoom.type === "other" && !newRoom.customName.trim()) return;
-    const id = String(Date.now());
-    const totalDevices = newRoom.deviceList.reduce((sum, d) => sum + d.count, 0) || 0;
-    const typeKey = newRoom.type === "other" ? newRoom.customName.trim() : newRoom.type;
-    const room = RoomFactory.createRoom(id, typeKey, newRoom.temperature, newRoom.humidity, totalDevices);
-    if (newRoom.type === "other") room.name = newRoom.customName.trim();
-    room.deviceList = newRoom.deviceList;
-    setRoomList(prev => [...prev, room]);
-    setNewRoom({ type: "living", customName: "", temperature: "", humidity: "", deviceList: [] });
-    setDeviceInput({ type: "Light", count: "1" });
-    setShowModal(false);
-  };
-
-  const handleDelete = () => {
-    setRoomList(prev => prev.filter(r => r.id !== deleteId));
-    setDeleteId(null);
-  };
+  const inputStyle = { width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1.5px solid #e0dcea", fontSize: "14px", outline: "none", color: "#1a1a1a", background: "white", boxSizing: "border-box" };
+  const modalBox   = { position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "white", borderRadius: "16px", boxShadow: "0 20px 60px rgba(0,0,0,0.20)", padding: "28px", width: "min(460px,90vw)", zIndex: 1001 };
 
   return (
     <Layout>
-    <div className="rooms-wrapper">
+      <style>{`
+        .room-card { background: white; border-radius: 14px; padding: 20px; box-shadow: 0 6px 15px rgba(0,0,0,0.06); cursor: pointer; transition: transform 0.3s ease, box-shadow 0.3s ease; border: 1px solid #f0eef8; }
+        .room-card:hover { transform: translateY(-5px); box-shadow: 0 12px 28px rgba(0,0,0,0.12); }
+        @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
+      `}</style>
 
-      {/* ================= NAVBAR ================= */}
-      <nav className="navbar">
-        <div className="container-fluid d-flex align-items-center justify-content-between">
-          <div className="d-flex align-items-center">
-            <button className="btn btn-sm me-2 text-white" onClick={() => navigate("/")} style={{ background: "transparent", border: "none", fontSize: "1.5rem", backgroundColor: "#63a17f" }}>
-              <ArrowLeft size={24} />
-            </button>
-            <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
-              <span style={{ fontSize: "20px", fontWeight: "bold", color: "#63a17f" }}>Your Rooms</span>
-            </div>
+      <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #f8f9fa, #eef3f7)", padding: "24px" }}>
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "28px", flexWrap: "wrap", gap: "12px" }}>
+          <div>
+            <h2 style={{ margin: "0 0 4px", fontWeight: "800", fontSize: "22px", color: "#1a1a1a" }}>Rooms</h2>
+            <p style={{ margin: 0, fontSize: "14px", color: "#777" }}>Manage and monitor every room in your home</p>
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            style={{ display: "flex", alignItems: "center", gap: "6px", background: "#63a17f", color: "white", border: "none", borderRadius: "8px", padding: "7px 14px", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}
-          >
-            <Plus size={16} /> Add Room
-          </button>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <StatusPill online={online} loading={loading} />
+            {isAdmin && (
+              <button
+                onClick={() => { setShowModal(true); setFormError(""); }}
+                style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "10px", border: "none", background: "#63a17f", color: "white", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}>
+                <Plus size={16} /> Add Room
+              </button>
+            )}
+          </div>
         </div>
-      </nav>
 
+      
+        {loading && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "60px", color: "#aaa", gap: "10px", fontSize: "14px" }}>
+            <RotateCcw size={18} style={{ animation: "spin 1s linear infinite" }} /> Loading rooms...
+          </div>
+        )}
 
-      {/* ================= ROOMS GRID ================= */}
-      <div className="p-4">
-        <div className="row">
+        {!loading && rooms.length === 0 && (
+          <div style={{ textAlign: "center", padding: "60px", color: "#bbb", fontSize: "14px", background: "white", borderRadius: "14px", boxShadow: "0 6px 15px rgba(0,0,0,0.06)" }}>
+            <Home size={40} color="#e0dcea" strokeWidth={1.5} style={{ marginBottom: "12px", display: "block", margin: "0 auto 12px" }} />
+            <p style={{ margin: "0 0 4px", fontWeight: "600", fontSize: "15px", color: "#aaa" }}>
+              {online ? "No rooms yet" : "Could not load rooms"}
+            </p>
+            <p style={{ margin: 0, fontSize: "13px" }}>
+              {online && isAdmin ? 'Click "Add Room" to create your first room.' : online ? "Ask your admin to add rooms." : "Check your connection and try again."}
+            </p>
+          </div>
+        )}
 
-          {roomList.map((room) => {
-
-            const Icon = room.icon;
-
-            return (
-
-              <div key={room.id} className="col-md-4 col-sm-6 mb-4">
-
-                <div
-                  className="room-card p-4"
-                  style={{ position: "relative" }}
-                  onClick={() => navigate(`/rooms/${room.id}`)}
-                >
-
-                  {/* ===== DELETE BUTTON ===== */}
-                  <button
-                    className="delete-btn"
-                    onClick={e => { e.stopPropagation(); setDeleteId(room.id); }}
-                  >
-                    <Trash2 size={14} color="#c03030" />
-                  </button>
-
-                  {/* ===== TOP SECTION ===== */}
-                  <div className="d-flex align-items-center gap-3 mb-3">
-
-                    <div className="room-icon">
-                      <Icon size={26} color="#63a17f" />
+        {!loading && rooms.length > 0 && (
+          <div className="row g-3">
+            {rooms.map(room => {
+              const Icon = room.icon;
+              return (
+                <div key={room.id} className="col-md-4 col-sm-6">
+                  <div className="room-card" onClick={() => navigate(`/rooms/${room.id}`)}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "14px" }}>
+                      <div style={{ width: "54px", height: "54px", background: "#e7f3ee", borderRadius: "13px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <Icon size={26} color="#63a17f" />
+                      </div>
+                      <div>
+                        <h5 style={{ margin: "0 0 3px", fontWeight: "700", fontSize: "16px", color: "#1a1a1a" }}>{room.name}</h5>
+                        <p style={{ margin: 0, fontSize: "12px", color: "#888" }}>
+                          {room.deviceCount} device{room.deviceCount !== 1 ? "s" : ""}
+                        </p>
+                      </div>
                     </div>
-
-                    <div>
-                      <h5 className="mb-1 fw-bold">{room.name}</h5>
-                      <p className="text-muted small mb-0">
-                        {room.devices} devices
-                      </p>
+                    {room.description && (
+                      <p style={{ margin: "0 0 12px", fontSize: "12px", color: "#aaa", lineHeight: 1.5 }}>{room.description}</p>
+                    )}
+                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                      <span style={{ fontSize: "11px", color: "#63a17f", fontWeight: "600", background: "#e8f5ee", padding: "3px 10px", borderRadius: "10px" }}>
+                        View Room →
+                      </span>
                     </div>
-
                   </div>
-
-
-                  {/* ===== TEMPERATURE & HUMIDITY ===== */}
-                  <div className="d-flex justify-content-between text-muted small">
-
-                    <span className="d-flex align-items-center gap-1">
-                      <Thermometer size={16} />
-                      {room.temperature}
-                    </span>
-
-                    <span className="d-flex align-items-center gap-1">
-                      <Droplets size={16} />
-                      {room.humidity}
-                    </span>
-
-                  </div>
-
                 </div>
-              </div>
-            );
-          })}
-
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-
-      {/* ================= ADD ROOM MODAL ================= */}
       {showModal && (
         <>
-          <div className="modal-overlay" onClick={() => setShowModal(false)} />
-          <div className="modal-box">
-
-            <div className="modal-header">
+          <Overlay onClick={() => setShowModal(false)} />
+          <div style={modalBox}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
               <h5 style={{ margin: 0, fontWeight: "700", fontSize: "17px", color: "#1a1a1a" }}>Add New Room</h5>
               <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", cursor: "pointer" }}>
                 <X size={20} color="#888" />
               </button>
             </div>
 
-            <div className="modal-body">
-
-              <div className="field-group">
-                <p className="field-label">Room Type</p>
-                <select className="field-input" value={newRoom.type} onChange={e => setNewRoom(r => ({ ...r, type: e.target.value, customName: "" }))}>
-                  {roomTypes.map(t => (
-                    <option key={t} value={t}>
-                      {t === "other" ? "Other (custom name)" : t.charAt(0).toUpperCase() + t.slice(1)}
-                    </option>
-                  ))}
-                </select>
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div>
+                <p style={{ margin: "0 0 6px", fontSize: "13px", fontWeight: "600", color: "#444" }}>Room Name *</p>
+                <input style={inputStyle} placeholder="e.g. Living Room"
+                  value={formName} onChange={e => setFormName(e.target.value)} />
               </div>
-
-              {newRoom.type === "other" && (
-                <div className="field-group">
-                  <p className="field-label">Room Name</p>
-                  <input className="field-input" placeholder="e.g. Studio, Gym, Workshop..." value={newRoom.customName} onChange={e => setNewRoom(r => ({ ...r, customName: e.target.value }))} />
+              <div>
+                <p style={{ margin: "0 0 6px", fontSize: "13px", fontWeight: "600", color: "#444" }}>Description <span style={{ color: "#aaa", fontWeight: "400" }}>(optional)</span></p>
+                <input style={inputStyle} placeholder="e.g. Main living area on ground floor"
+                  value={formDesc} onChange={e => setFormDesc(e.target.value)} />
+              </div>
+              {formError && (
+                <div style={{ padding: "10px 14px", background: "#fef2f2", borderRadius: "8px", border: "1px solid #fdd", fontSize: "13px", color: "#c03030" }}>
+                  {formError}
                 </div>
               )}
-
-              <div className="field-group">
-                <p className="field-label">Temperature</p>
-                <input className="field-input" placeholder="e.g. 22°C" value={newRoom.temperature} onChange={e => setNewRoom(r => ({ ...r, temperature: e.target.value }))} />
+              <div style={{ padding: "10px 14px", background: "#f0faf4", borderRadius: "8px", border: "1px solid #c2e0cf", fontSize: "12px", color: "#63a17f" }}>
+                After creating the room, open it to add devices.
               </div>
-
-              <div className="field-group">
-                <p className="field-label">Humidity</p>
-                <input className="field-input" placeholder="e.g. 45%" value={newRoom.humidity} onChange={e => setNewRoom(r => ({ ...r, humidity: e.target.value }))} />
-              </div>
-
-              <div className="field-group">
-                <p className="field-label">Devices</p>
-                <div className="device-row">
-                  <select className="field-input" style={{ flex: 2 }} value={deviceInput.type} onChange={e => setDeviceInput(d => ({ ...d, type: e.target.value }))}>
-                    {deviceTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                  <input className="field-input" style={{ flex: 1 }} type="number" min="1" placeholder="Qty" value={deviceInput.count} onChange={e => setDeviceInput(d => ({ ...d, count: e.target.value }))} />
-                  <button className="add-device-btn" onClick={addDeviceEntry}>+</button>
-                </div>
-
-                {newRoom.deviceList.length > 0 ? (
-                  <div className="device-list">
-                    {newRoom.deviceList.map((d, i) => (
-                      <div key={i} className="device-tag">
-                        <span>{d.type} <strong>×{d.count}</strong></span>
-                        <button onClick={() => removeDeviceEntry(i)} style={{ background: "none", border: "none", cursor: "pointer", padding: "0 2px", display: "flex", alignItems: "center" }}>
-                          <X size={13} color="#c03030" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p style={{ margin: "6px 0 0", fontSize: "12px", color: "#aaa" }}>No devices added yet.</p>
-                )}
-              </div>
-
             </div>
 
-            <div className="modal-footer">
-              <button className="btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
-              <button className="btn-primary" onClick={handleAdd}>Add Room</button>
+            <div style={{ display: "flex", gap: "10px", marginTop: "24px", justifyContent: "flex-end" }}>
+              <button onClick={() => setShowModal(false)}
+                style={{ background: "#f0f0f0", color: "#555", border: "none", borderRadius: "8px", padding: "10px 20px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+                Cancel
+              </button>
+              <button onClick={handleAddRoom} disabled={submitting}
+                style={{ background: submitting ? "#aaa" : "#63a17f", color: "white", border: "none", borderRadius: "8px", padding: "10px 20px", fontSize: "14px", fontWeight: "600", cursor: submitting ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                {submitting ? <><RotateCcw size={13} style={{ animation: "spin 1s linear infinite" }} /> Creating...</> : "Create Room"}
+              </button>
             </div>
-
           </div>
         </>
       )}
-
-
-      {/* ================= DELETE CONFIRM MODAL ================= */}
-      {deleteId && (
-        <>
-          <div className="modal-overlay" onClick={() => setDeleteId(null)} />
-          <div className="modal-box" style={{ textAlign: "center", maxWidth: "360px" }}>
-
-            <div style={{ width: "52px", height: "52px", background: "#fee8e8", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-              <Trash2 size={22} color="#c03030" />
-            </div>
-
-            <h5 style={{ margin: "0 0 8px", fontWeight: "700", fontSize: "17px", color: "#1a1a1a" }}>Delete Room?</h5>
-            <p style={{ margin: "0 0 24px", fontSize: "13px", color: "#777" }}>This will permanently remove the room and all its data.</p>
-
-            <div className="modal-footer" style={{ justifyContent: "center" }}>
-              <button className="btn-secondary" onClick={() => setDeleteId(null)}>Cancel</button>
-              <button className="btn-danger"   onClick={handleDelete}>Delete</button>
-            </div>
-
-          </div>
-        </>
-      )}
-
-
-      {/* ================= STYLES ================= */}
-      <style jsx>{`
-
-        .rooms-wrapper {
-          min-height: 100vh;
-          background: linear-gradient(135deg,#f8f9fa,#eef3f7);
-        }
-
-        .room-card {
-          background: white;
-          border-radius: 14px;
-          box-shadow: 0 6px 15px rgba(0,0,0,0.06);
-          cursor: pointer;
-          transition: all 0.3s ease;
-        }
-
-        .room-card:hover {
-          transform: translateY(-5px);
-          box-shadow: 0 12px 28px rgba(0,0,0,0.12);
-        }
-
-        .room-icon {
-          width: 50px;
-          height: 50px;
-          background: #e7f3ee;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        h5 {
-          font-size: 1.1rem;
-        }
-
-        .delete-btn {
-          position: absolute;
-          top: 12px;
-          right: 12px;
-          background: #fee8e8;
-          border: none;
-          border-radius: 8px;
-          width: 30px;
-          height: 30px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          transition: background 0.2s ease;
-        }
-
-        .delete-btn:hover {
-          background: #fdd0d0;
-        }
-
-        .modal-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0,0,0,0.45);
-          z-index: 1000;
-        }
-
-        .modal-box {
-          position: fixed;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
-          background: white;
-          border-radius: 16px;
-          box-shadow: 0 20px 60px rgba(0,0,0,0.20);
-          padding: 28px;
-          width: min(420px, 90vw);
-          z-index: 1001;
-          max-height: 85vh;
-          overflow-y: auto;
-        }
-
-        .modal-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 20px;
-        }
-
-        .modal-body {
-          display: flex;
-          flex-direction: column;
-          gap: 14px;
-        }
-
-        .modal-footer {
-          display: flex;
-          gap: 10px;
-          margin-top: 24px;
-          justify-content: flex-end;
-        }
-
-        .field-group {
-          display: flex;
-          flex-direction: column;
-        }
-
-        .field-label {
-          margin: 0 0 6px;
-          font-size: 13px;
-          font-weight: 600;
-          color: #444;
-        }
-
-        .field-input {
-          width: 100%;
-          padding: 9px 12px;
-          border-radius: 8px;
-          border: 1.5px solid #d0e8da;
-          font-size: 14px;
-          outline: none;
-          color: #1a1a1a;
-          background: white;
-          box-sizing: border-box;
-        }
-
-        .device-row {
-          display: flex;
-          gap: 8px;
-          margin-bottom: 8px;
-        }
-
-        .add-device-btn {
-          background: #63a17f;
-          color: white;
-          border: none;
-          border-radius: 8px;
-          padding: 0 14px;
-          cursor: pointer;
-          font-weight: 700;
-          font-size: 18px;
-          flex-shrink: 0;
-        }
-
-        .device-list {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-
-        .device-tag {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          background: #f0faf4;
-          border-radius: 8px;
-          padding: 7px 12px;
-          border: 1px solid #c2e0cf;
-          font-size: 13px;
-          color: #1a1a1a;
-        }
-
-        .btn-primary {
-          background: #63a17f;
-          color: white;
-          border: none;
-          border-radius: 8px;
-          padding: 10px 20px;
-          font-size: 14px;
-          font-weight: 600;
-          cursor: pointer;
-        }
-
-        .btn-secondary {
-          background: #f0f0f0;
-          color: #555;
-          border: none;
-          border-radius: 8px;
-          padding: 10px 20px;
-          font-size: 14px;
-          font-weight: 600;
-          cursor: pointer;
-        }
-
-        .btn-danger {
-          background: #c03030;
-          color: white;
-          border: none;
-          border-radius: 8px;
-          padding: 10px 20px;
-          font-size: 14px;
-          font-weight: 600;
-          cursor: pointer;
-        }
-
-      `}</style>
-
-    </div>
     </Layout>
   );
 };
