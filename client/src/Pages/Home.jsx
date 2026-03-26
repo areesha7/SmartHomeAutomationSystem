@@ -252,7 +252,7 @@ const Dashboard = () => {
         const list = data?.data?.rooms || data?.rooms || [];
         setRooms(list.map(r => RoomCardFactory.fromBackend(r)));
         setRoomsOnline(true);
-        roomIdSet = buildRoomIdSet(list); // ← local, no state needed
+        roomIdSet = buildRoomIdSet(list); 
         setUserRoomIds(roomIdSet);
       }
     } catch {

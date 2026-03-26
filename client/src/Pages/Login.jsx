@@ -1,5 +1,4 @@
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import "../styles/theme.css";
@@ -9,13 +8,78 @@ import { useAuth } from "../context/AuthContext";
 const API_URL = import.meta.env.VITE_API_URL;
 
 export default function Login() {
-  const navigate    = useNavigate();
-  const { login }   = useAuth();
+  const navigate = useNavigate();
+  const { login } = useAuth();
 
-  const [email,    setEmail]    = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error,    setError]    = useState("");
-  const [loading,  setLoading]  = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  
+  useEffect(() => {
+    // Check if already loaded
+    if (window.googleInitialized) return;
+    
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      window.googleInitialized = true;
+      
+      // Initialize Google Sign-In
+      window.google.accounts.id.initialize({
+        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+        callback: handleGoogleResponse,
+        auto_select: false,
+        cancel_on_tap_outside: true,
+      });
+      
+      // Render the Google button
+      window.google.accounts.id.renderButton(
+        document.getElementById("googleSignInButton"),
+        { 
+          theme: "outline", 
+          size: "large",
+          text: "signin_with",
+          shape: "rectangular"
+        }
+      );
+    };
+    
+    document.head.appendChild(script);
+  }, []);
+
+  const handleGoogleResponse = async (response) => {
+    try {
+      setGoogleLoading(true);
+      setError("");
+      
+      console.log("Sending Google token to backend...");
+      
+      const res = await axios.post(`${API_URL}/auth/google`, {
+        idToken: response.credential,
+        role: "ADMIN"
+      });
+      
+      const { user, tokens, isNewUser } = res.data.data;
+      
+      login(user, tokens.accessToken);
+      
+      if (isNewUser) {
+        navigate("/create-home");
+      } else {
+        navigate("/");
+      }
+    } catch (err) {
+      console.error("Google login error:", err);
+      const message = err.response?.data?.message || "Google login failed. Please try again.";
+      setError(message);
+      setGoogleLoading(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -44,10 +108,6 @@ export default function Login() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleGoogleLogin = () => {
-    console.log("Google login — coming soon");
   };
 
   return (
@@ -81,6 +141,7 @@ export default function Login() {
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
             />
 
             <button
@@ -91,13 +152,28 @@ export default function Login() {
               {loading ? "Logging in..." : "Login"}
             </button>
 
-            <button className="button-google" onClick={handleGoogleLogin}>
-              <img src="/google.logo.png" alt="google" />
-              Sign in with Google
-            </button>
+            <div style={{ textAlign: "center", margin: "15px 0", color: "#aaa" }}>
+              ───── or ─────
+            </div>
+
+            
+            <div 
+              id="googleSignInButton" 
+              style={{ 
+                display: "flex", 
+                justifyContent: "center",
+                width: "100%"
+              }}
+            ></div>
+            
+            {googleLoading && (
+              <p style={{ textAlign: "center", fontSize: "12px", marginTop: "10px", color: "#63a17f" }}>
+                Signing in...
+              </p>
+            )}
 
             <div className="form-links">
-              <Link to="/reset">Forgot Password?</Link>
+              <Link to="/forgot-password">Forgot Password?</Link>
             </div>
 
             <div className="form-links">

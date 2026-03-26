@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Settings, Bell, ChevronUp, LogOut } from "lucide-react";
@@ -113,12 +110,13 @@ const Layout = ({ children }) => {
             <li className="nav-item mb-2">
               <Link to="/analytics" className="nav-link text-white custom-nav-link">Analytics</Link>
             </li>
-            <li className="nav-item mb-2">
+            {/* <li className="nav-item mb-2">
               <Link to="/profile" className="nav-link text-white custom-nav-link">Profile</Link>
-            </li>
+            </li> */}
             <li className="nav-item mb-2">
   <Link to="/modeling" className="nav-link text-white custom-nav-link">Modeling</Link>
 </li>
+
           </ul>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -126,7 +124,7 @@ const Layout = ({ children }) => {
             <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.35)", margin: "0 0 4px" }} />
 
             <div ref={settingsRef} style={{ position: "relative" }}>
-              {settingsOpen && (
+              {/* {settingsOpen && (
                 <div style={popup}>
                   <Link to="/notifications" onClick={() => setSettingsOpen(false)}
                     style={popupLink({ borderBottom: "1px solid #f0f0f0" })}
@@ -142,9 +140,12 @@ const Layout = ({ children }) => {
                     <div style={iconBox("#eef3ff")}><Settings size={16} color="#5c35b0" strokeWidth={2} /></div>
                     Settings
                   </Link>
+                  <Link to="/home-admin" className="nav-link">
+  🏠 Home Admin
+</Link>
                 </div>
-              )}
-              <button onClick={toggleSettings} style={triggerBtn(settingsOpen)}>
+              )} */}
+              {/* <button onClick={toggleSettings} style={triggerBtn(settingsOpen)}>
                 <div style={{ width:"34px",height:"34px",borderRadius:"8px",background:"rgba(255,255,255,0.22)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
                   <Settings size={17} color="white" strokeWidth={2} />
                 </div>
@@ -156,7 +157,7 @@ const Layout = ({ children }) => {
                   transform: settingsOpen ? "rotate(0deg)" : "rotate(180deg)",
                   transition: "transform 0.25s ease", flexShrink: 0,
                 }} />
-              </button>
+              </button> */}
             </div>
 
             <div ref={logoutRef} style={{ position: "relative" }}>
