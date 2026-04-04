@@ -204,28 +204,28 @@ const Dashboard = () => {
   const TEAL   = "#187070";
   const RED    = "#c03030";
 
-  const [home,           setHome]           = useState(null);
-  const [rooms,          setRooms]          = useState([]);
+  const [home, setHome] = useState(null);
+  const [rooms, setRooms] = useState([]);
   const [allDevices,     setAllDevices]     = useState([]);
-  const [liveEvents,     setLiveEvents]     = useState([]);
-  const [loadingHome,    setLoadingHome]    = useState(true);
+  const [liveEvents, setLiveEvents] = useState([]);
+  const [loadingHome, setLoadingHome] = useState(true);
   const [loadingRooms,   setLoadingRooms]   = useState(true);
   const [loadingDevices, setLoadingDevices] = useState(true);
   const [loadingEvents,  setLoadingEvents]  = useState(true);
-  const [homeOnline,     setHomeOnline]     = useState(false);
-  const [roomsOnline,    setRoomsOnline]    = useState(false);
+  const [homeOnline, setHomeOnline] = useState(false);
+  const [roomsOnline,  setRoomsOnline]= useState(false);
   const [devicesOnline,  setDevicesOnline]  = useState(false);
-  const [eventsOnline,   setEventsOnline]   = useState(false);
-  const [bulkLoading,    setBulkLoading]    = useState(false);
+  const [eventsOnline, setEventsOnline] = useState(false);
+  const [bulkLoading, setBulkLoading] = useState(false);
 
 
-  const [userRoomIds,   setUserRoomIds]   = useState(new Set());
+  const [userRoomIds, setUserRoomIds]   = useState(new Set());
   const [userDeviceIds, setUserDeviceIds] = useState(new Set());
 
-  const [stats,         setStats]         = useState({ totalDevices: 0, activeDevices: 0, lightsOn: 0, livePowerW: 0, faultCount: 0, totalDoors: 0, doorsLocked: 0 });
+  const [stats, setStats] = useState({ totalDevices: 0, activeDevices: 0, lightsOn: 0, livePowerW: 0, faultCount: 0, totalDoors: 0, doorsLocked: 0 });
   const [recentDevices, setRecentDevices] = useState([]);
-  const [activeAction,  setActive]        = useState(null);
-  const [cmdHistory,    setCmdHist]       = useState([]);
+  const [activeAction,  setActive] = useState(null);
+  const [cmdHistory, setCmdHist] = useState([]);
 
   const loadAll = useCallback(async (t) => {
 
@@ -386,22 +386,22 @@ const Dashboard = () => {
     setTimeout(() => setActive(null), 700);
   };
 
-  const faultAlerts    = eventsOnline ? deriveAlertsFromEvents(liveEvents)   : [];
+  const faultAlerts = eventsOnline ? deriveAlertsFromEvents(liveEvents)   : [];
   const activityAlerts = eventsOnline ? deriveActivityFromEvents(liveEvents) : [];
-  const allAlerts      = [...faultAlerts, ...activityAlerts].slice(0, 3);
+  const allAlerts = [...faultAlerts, ...activityAlerts].slice(0, 3);
 
   const quickActions = [
     {
-      key:    "lon",
-      label:  "All Lights On",
-      icon:   Lightbulb,
+      key: "lon",
+      label: "All Lights On",
+      icon: Lightbulb,
       accent: GOLD,
       onClick: () => bulkControlLights("ON"),
     },
     {
-      key:    "lof",
+      key: "lof",
       label:  "All Lights Off",
-      icon:   Power,
+      icon: Power,
       accent: PURPLE,
       onClick: () => bulkControlLights("OFF"),
     },
@@ -409,14 +409,14 @@ const Dashboard = () => {
 
   const statCards = [
     { title: "Active Devices",  value: stats.activeDevices, suffix: "",   sub: `of ${stats.totalDevices} total`, icon: Zap,           accent: PURPLE },
-    { title: "Lights On",       value: stats.lightsOn,      suffix: "",   sub: "currently on",                   icon: Lightbulb,     accent: GOLD   },
-    { title: "Live Power Draw", value: stats.livePowerW,    suffix: "W",  sub: "from ON devices",                icon: Activity,      accent: P      },
-    { title: "Fault Devices",   value: stats.faultCount,    suffix: "",   sub: "need attention",                 icon: AlertTriangle, accent: RED    },
+    { title: "Lights On", value: stats.lightsOn, suffix: "",   sub: "currently on", icon: Lightbulb, accent: GOLD   },
+    { title: "Live Power Draw", value: stats.livePowerW, suffix: "W",  sub: "from ON devices", icon: Activity, accent: P      },
+    { title:"Fault Devices", value: stats.faultCount, suffix: "",   sub: "need attention", icon: AlertTriangle, accent: RED    },
   ];
 
-  const fmt      = d => d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const fmt = d => d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   const fmtDate  = d => d.toLocaleDateString("en-US",  { weekday: "long", month: "long", day: "numeric" });
-  const hour     = now.getHours();
+  const hour = now.getHours();
   const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
   const userName = user?.name || user?.email?.split("@")[0] || "";
 
@@ -480,7 +480,7 @@ const Dashboard = () => {
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", justifyContent: "flex-end" }}>
-                  <LiveBadge online={homeOnline}    loading={loadingHome}    />
+                  <LiveBadge online={homeOnline} loading={loadingHome}    />
                   <LiveBadge online={devicesOnline} loading={loadingDevices} />
                   <LiveBadge online={eventsOnline}  loading={loadingEvents}  />
                 </div>
@@ -522,7 +522,7 @@ const Dashboard = () => {
             />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "14px" }}>
               {quickActions.map(btn => {
-                const Icon   = btn.icon;
+                const Icon = btn.icon;
                 const active = activeAction === btn.key;
                 return (
                   <motion.button key={btn.key} className="hq-action" whileTap={{ scale: 0.97 }}

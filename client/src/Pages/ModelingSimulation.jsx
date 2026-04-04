@@ -50,7 +50,6 @@ const filterEventsByUserDevices = (events, userDeviceIds) => {
 /* 
    TEMPLATE METHOD PATTERN
    Base simulation defines fixed algorithm steps. Each scenario overrides only the variant run() step.
-   All inputs come from real backend data 
  */
 class SimulationTemplate {
   run(params) { return {}; }
@@ -60,11 +59,11 @@ class NormalSimulation extends SimulationTemplate {
   run({ totalEvents, totalDevices, spanHours, avgPower }) {
     const lambda = spanHours > 0 ? (totalEvents / spanHours).toFixed(2) : 0;
     return {
-      label:           "Normal Usage",
+      label: "Normal Usage",
       avgResponseTime: (100 + totalEvents * 1.2).toFixed(1),
-      utilization:     Math.min(0.95, totalDevices > 0 ? totalEvents / (totalDevices * 10) : 0).toFixed(2),
-      energyKwh:       (avgPower * totalDevices * spanHours / 1000).toFixed(2),
-      stability:       Math.max(0, 100 - totalEvents * 0.5).toFixed(1),
+      utilization: Math.min(0.95, totalDevices > 0 ? totalEvents / (totalDevices * 10) : 0).toFixed(2),
+      energyKwh: (avgPower * totalDevices * spanHours / 1000).toFixed(2),
+      stability:  Math.max(0, 100 - (totalEvents / Math.max(totalDevices, 1)) * 0.5).toFixed(1),
       lambda,
     };
   }
@@ -73,11 +72,11 @@ class PeakSimulation extends SimulationTemplate {
   run({ totalEvents, totalDevices, spanHours, avgPower }) {
     const lambda = spanHours > 0 ? (totalEvents / spanHours).toFixed(2) : 0;
     return {
-      label:           "Peak Usage",
+      label: "Peak Usage",
       avgResponseTime: (200 + totalEvents * 2.5).toFixed(1),
-      utilization:     Math.min(0.99, totalDevices > 0 ? (totalEvents * 1.8) / (totalDevices * 10) : 0).toFixed(2),
-      energyKwh:       (avgPower * totalDevices * spanHours * 1.8 / 1000).toFixed(2),
-      stability:       Math.max(0, 100 - totalEvents * 1.2).toFixed(1),
+      utilization: Math.min(0.99, totalDevices > 0 ? (totalEvents * 1.8) / (totalDevices * 10) : 0).toFixed(2),
+      energyKwh: (avgPower * totalDevices * spanHours * 1.8 / 1000).toFixed(2),
+      stability: Math.max(0, 100 - (totalEvents / Math.max(totalDevices, 1)) * 1.2).toFixed(1),
       lambda,
     };
   }
@@ -86,11 +85,11 @@ class EnergySavingSimulation extends SimulationTemplate {
   run({ totalEvents, totalDevices, spanHours, avgPower }) {
     const lambda = spanHours > 0 ? (totalEvents / spanHours).toFixed(2) : 0;
     return {
-      label:           "Energy Saving",
+      label: "Energy Saving",
       avgResponseTime: (130 + totalEvents * 1.0).toFixed(1),
-      utilization:     Math.min(0.60, totalDevices > 0 ? totalEvents / (totalDevices * 18) : 0).toFixed(2),
-      energyKwh:       (avgPower * totalDevices * spanHours * 0.45 / 1000).toFixed(2),
-      stability:       Math.max(0, 100 - totalEvents * 0.3).toFixed(1),
+      utilization: Math.min(0.60, totalDevices > 0 ? totalEvents / (totalDevices * 18) : 0).toFixed(2),
+      energyKwh: (avgPower * totalDevices * spanHours * 0.45 / 1000).toFixed(2),
+      stability: Math.max(0, 100 - (totalEvents / Math.max(totalDevices, 1)) * 0.3).toFixed(1),
       lambda,
     };
   }
@@ -99,11 +98,11 @@ class SensorFailureSimulation extends SimulationTemplate {
   run({ totalEvents, totalDevices, spanHours, avgPower }) {
     const lambda = spanHours > 0 ? (totalEvents / spanHours).toFixed(2) : 0;
     return {
-      label:           "Sensor Failure",
+      label: "Sensor Failure",
       avgResponseTime: (350 + totalEvents * 3.0).toFixed(1),
-      utilization:     Math.min(0.99, totalDevices > 0 ? (totalEvents * 1.5) / (totalDevices * 8) : 0).toFixed(2),
-      energyKwh:       (avgPower * totalDevices * spanHours * 1.3 / 1000).toFixed(2),
-      stability:       Math.max(0, 100 - totalEvents * 2.0).toFixed(1),
+      utilization: Math.min(0.99, totalDevices > 0 ? (totalEvents * 1.5) / (totalDevices * 8) : 0).toFixed(2),
+      energyKwh: (avgPower * totalDevices * spanHours * 1.3 / 1000).toFixed(2),
+      stability: Math.max(0, 100 - (totalEvents / Math.max(totalDevices, 1)) * 2.0).toFixed(1),
       lambda,
     };
   }
@@ -112,21 +111,21 @@ class EmergencySimulation extends SimulationTemplate {
   run({ totalEvents, totalDevices, spanHours, avgPower }) {
     const lambda = spanHours > 0 ? (totalEvents / spanHours).toFixed(2) : 0;
     return {
-      label:           "Emergency Alert",
+      label: "Emergency Alert",
       avgResponseTime: (480 + totalEvents * 4.0).toFixed(1),
-      utilization:     Math.min(0.99, totalDevices > 0 ? (totalEvents * 2.2) / (totalDevices * 6) : 0).toFixed(2),
-      energyKwh:       (avgPower * totalDevices * spanHours * 2.0 / 1000).toFixed(2),
-      stability:       Math.max(0, 100 - totalEvents * 3.0).toFixed(1),
+      utilization: Math.min(0.99, totalDevices > 0 ? (totalEvents * 2.2) / (totalDevices * 6) : 0).toFixed(2),
+      energyKwh: (avgPower * totalDevices * spanHours * 2.0 / 1000).toFixed(2),
+      stability: Math.max(0, 100 - (totalEvents / Math.max(totalDevices, 1)) * 3.0).toFixed(1),
       lambda,
     };
   }
 }
 
 const simulationMap = {
-  normal:    new NormalSimulation(),
-  peak:      new PeakSimulation(),
-  energy:    new EnergySavingSimulation(),
-  sensor:    new SensorFailureSimulation(),
+  normal: new NormalSimulation(),
+  peak: new PeakSimulation(),
+  energy: new EnergySavingSimulation(),
+  sensor: new SensorFailureSimulation(),
   emergency: new EmergencySimulation(),
 };
 
@@ -218,18 +217,27 @@ const StatusBadge = ({ status }) => {
 export default function ModelingSimulation() {
   const { token, user } = useAuth();
 
-  const [allEvents,      setAllEvents]      = useState([]);
+  const [allEvents, setAllEvents] = useState([]);
   const [filteredEvents, setFilteredEvents] = useState([]);
-  const [allDevices,     setAllDevices]     = useState([]);
+  const [allDevices, setAllDevices] = useState([]);
   const [filteredDevices, setFilteredDevices] = useState([]);
-  const [loadingEv,      setLoadingEv]      = useState(true);
-  const [loadingDev,     setLoadingDev]     = useState(true);
-  const [error,          setError]          = useState("");
+  const [loadingEv, setLoadingEv] = useState(true);
+  const [loadingDev,     setLoadingDev] = useState(true);
+  const [error, setError] = useState("");
   const [selectedDevice, setSelectedDevice] = useState("all");
-  const [simMode,        setSimMode]        = useState("normal");
-  const [simResults,     setSimResults]     = useState([]);
-  const [simRunning,     setSimRunning]     = useState(false);
-  const [controlling,    setControlling]    = useState(null);
+  const [simMode, setSimMode] = useState("normal");
+  const [simResults, setSimResults] = useState([]);
+  const [simRunning,     setSimRunning] = useState(false);
+  const [controlling, setControlling]    = useState(null);
+  const [compareData,    setCompareData]    = useState(null);
+
+  const scenarioMap = {
+    normal:"NORMAL",
+    peak: "HIGH_USAGE",
+    energy: "ENERGY_SAVING",
+    sensor: "HIGH_USAGE",
+    emergency: "HIGH_USAGE",
+  };
 
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -329,7 +337,7 @@ export default function ModelingSimulation() {
   }, [events, selectedDevice]);
 
   const poissonChart = useMemo(() => buildPoissonChart(filteredEventsByDevice), [filteredEventsByDevice]);
-  const lambda       = useMemo(() => computeLambda(filteredEventsByDevice),      [filteredEventsByDevice]);
+  const lambda = useMemo(() => computeLambda(filteredEventsByDevice),      [filteredEventsByDevice]);
   const markovMatrix = useMemo(() => buildMarkovMatrix(events),                  [events]);
   const steadyState  = useMemo(() => computeSteadyState(markovMatrix),          [markovMatrix]);
 
@@ -356,18 +364,51 @@ export default function ModelingSimulation() {
     return devices.reduce((s, d) => s + (d.powerRatingWatt || 0), 0) / devices.length;
   }, [devices]);
 
-  const handleRunSim = () => {
+  const handleRunSim = async () => {
     setSimRunning(true);
-    setTimeout(() => {
-      const result = simulationMap[simMode].execute({
+    try {
+      const backendScenario = scenarioMap[simMode];
+      const durationHours = Math.max(0.1, parseFloat(spanHours.toFixed(1)));
+
+      const res = await axios.post(
+        `${API}/simulation/run`,
+        { scenario: backendScenario, duration_hours: durationHours },
+        { headers }
+      );
+
+      const data = res.data.data || res.data;
+
+      const localResult = simulationMap[simMode].execute({
         totalEvents:  filteredEventsByDevice.length,
         totalDevices: devices.length,
         spanHours,
         avgPower,
       });
-      setSimResults(prev => [{ ...result, id: Date.now() }, ...prev].slice(0, 5));
+
+      const merged = {
+        ...localResult,
+        id: Date.now(),
+        energyKwh: data.energyKwh ?? localResult.energyKwh,
+        avgResponseTime: data.avgResponseTimeMs ?? localResult.avgResponseTime,
+        utilization: data.utilization != null
+          ? (data.utilization / 100).toFixed(2)
+          : localResult.utilization,
+      };
+
+      setSimResults(prev => [merged, ...prev].slice(0, 5));
+
+      try {
+        const cmp = await axios.get(`${API}/simulation/compare`, { headers });
+        setCompareData(cmp.data.data || cmp.data);
+      } catch {
+        setCompareData(null);
+      }
+
+    } catch (e) {
+      setError(e.response?.data?.message || "Simulation failed. Make sure devices are ON.");
+    } finally {
       setSimRunning(false);
-    }, 1000);
+    }
   };
 
   const handleControl = async (deviceId, action) => {
@@ -386,10 +427,10 @@ export default function ModelingSimulation() {
 
   const comparisonData = simResults.length > 1
     ? simResults.slice(0, 5).reverse().map(r => ({
-        label:        r.label.split(" ")[0],
+        label: r.label.split(" ")[0],
         responseTime: parseFloat(r.avgResponseTime),
         utilization:  parseFloat((r.utilization * 100).toFixed(1)),
-        stability:    parseFloat(r.stability),
+        stability: parseFloat(r.stability),
       }))
     : null;
 
@@ -758,6 +799,45 @@ export default function ModelingSimulation() {
                         ))}
                       </div>
                     </div>
+
+                    {compareData && (
+                      <div style={{ ...card, padding: "16px 20px", marginTop: "16px" }}>
+                        <h5 style={{ margin: "0 0 12px", fontWeight: "700", fontSize: "14px", color: "#1a1a1a" }}>
+                          Simulation vs Real Data
+                        </h5>
+                        <div className="row g-3">
+                          <div className="col-6">
+                            <div style={{ background: "#f0faf4", borderRadius: "10px", padding: "12px", border: "1px solid #c2e0cf", textAlign: "center" }}>
+                              <p style={{ margin: "0 0 2px", fontSize: "11px", fontWeight: "700", color: GREEN, textTransform: "uppercase" }}>Real Energy Today</p>
+                              <p style={{ margin: 0, fontSize: "22px", fontWeight: "800", color: GREEN, lineHeight: 1 }}>
+                                {compareData.real_energy_kwh != null ? `${compareData.real_energy_kwh} kWh` : "No data"}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="col-6">
+                            <div style={{ background: "#f3f0fc", borderRadius: "10px", padding: "12px", border: "1px solid #d4c8f0", textAlign: "center" }}>
+                              <p style={{ margin: "0 0 2px", fontSize: "11px", fontWeight: "700", color: ACCENT, textTransform: "uppercase" }}>Simulated Energy</p>
+                              <p style={{ margin: 0, fontSize: "22px", fontWeight: "800", color: ACCENT, lineHeight: 1 }}>
+                                {compareData.simulated_energy_kwh} kWh
+                              </p>
+                            </div>
+                          </div>
+                          {compareData.accuracy != null && (
+                            <div className="col-12">
+                              <div style={{ background: "#fafae8", borderRadius: "10px", padding: "10px 14px", border: "1px solid #e0de80", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <span style={{ fontSize: "13px", color: "#555" }}>Model Accuracy</span>
+                                <strong style={{ fontSize: "16px", color: GOLD }}>{compareData.accuracy}%</strong>
+                              </div>
+                            </div>
+                          )}
+                          {compareData.message && (
+                            <div className="col-12">
+                              <p style={{ margin: 0, fontSize: "12px", color: "#aaa", fontStyle: "italic" }}>{compareData.message}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
               </div>

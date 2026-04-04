@@ -308,12 +308,12 @@ const Analytics = () => {
      OBSERVER PATTERN
      All stats below auto-update whenever devices or filteredEvents state changes.
    */
-  const deviceStats   = useMemo(() => deriveDeviceStats(devices),          [devices]);
-  const devicePieData = useMemo(() => deriveDevicePie(devices),            [devices]);
-  const powerData     = useMemo(() => derivePowerByType(devices),          [devices]);
-  const eventStats    = useMemo(() => deriveEventStats(filteredEvents),    [filteredEvents]);
-  const hourlyData    = useMemo(() => deriveHourlyActivity(filteredEvents),[filteredEvents]);
-  const peakHour      = useMemo(() => derivePeakHour(hourlyData),         [hourlyData]);
+  const deviceStats   = useMemo(() => deriveDeviceStats(devices), [devices]);
+  const devicePieData = useMemo(() => deriveDevicePie(devices), [devices]);
+  const powerData = useMemo(() => derivePowerByType(devices), [devices]);
+  const eventStats = useMemo(() => deriveEventStats(filteredEvents), [filteredEvents]);
+  const hourlyData = useMemo(() => deriveHourlyActivity(filteredEvents),[filteredEvents]);
+  const peakHour = useMemo(() => derivePeakHour(hourlyData),         [hourlyData]);
   const actionBarData = useMemo(() => [
     { action: "ON",    count: eventStats.ON,    color: "#63a17f"  },
     { action: "OFF",   count: eventStats.OFF,   color: "#5c35b0"  },
@@ -356,13 +356,13 @@ const Analytics = () => {
             {devicesOnline && deviceStats.total > 0 ? (
               <div className="row g-3">
                 {[
-                  { label: "Total",         value: deviceStats.total,                                                                      color: "#5c35b0", bg: "#f2f0fa" },
-                  { label: "ON",            value: deviceStats.on,                                                                         color: "#2e8b57", bg: "#f0faf4" },
-                  { label: "OFF",           value: deviceStats.off,                                                                        color: "#888",    bg: "#f5f5f5" },
-                  { label: "IDLE",          value: deviceStats.idle,                                                                       color: "#b8860b", bg: "#fdf8e8" },
-                  { label: "FAULT",         value: deviceStats.fault,                                                                      color: "#c03030", bg: "#fef2f2" },
-                  { label: "Live Power",    value: `${deviceStats.livePowerW}W`,                                                           color: "#b8860b", bg: "#fdf8e8" },
-                  { label: "Capacity",      value: `${deviceStats.totalCapacityW}W`,                                                       color: "#5c35b0", bg: "#f2f0fa" },
+                  { label: "Total", value: deviceStats.total,                                                                      color: "#5c35b0", bg: "#f2f0fa" },
+                  { label: "ON", value: deviceStats.on,                                                                         color: "#2e8b57", bg: "#f0faf4" },
+                  { label: "OFF", value: deviceStats.off,                                                                        color: "#888",    bg: "#f5f5f5" },
+                  { label: "IDLE", value: deviceStats.idle,                                                                       color: "#b8860b", bg: "#fdf8e8" },
+                  { label: "FAULT", value: deviceStats.fault,                                                                      color: "#c03030", bg: "#fef2f2" },
+                  { label: "Live Power", value: `${deviceStats.livePowerW}W`,                                                           color: "#b8860b", bg: "#fdf8e8" },
+                  { label: "Capacity", value: `${deviceStats.totalCapacityW}W`,                                                       color: "#5c35b0", bg: "#f2f0fa" },
                   { label: "Utilization",   value: `${utilizationPct}%`,                                                                   color: "#5c35b0", bg: "#f2f0fa" },
                   { label: "Health Score",  value: `${deviceStats.healthScore}%`, color: deviceStats.healthScore > 80 ? "#2e8b57" : "#c03030", bg: deviceStats.healthScore > 80 ? "#f0faf4" : "#fef2f2" },
                 ].map((s, i) => (
@@ -392,12 +392,12 @@ const Analytics = () => {
             {eventsOnline ? (
               <div className="row g-3">
                 {[
-                  { label: "Total Events",  value: eventStats.total,        color: "#5c35b0", bg: "#ebe8f8" },
-                  { label: "ON Events",     value: eventStats.ON,           color: "#2e8b57", bg: "#f0faf4" },
-                  { label: "OFF Events",    value: eventStats.OFF,          color: "#888",    bg: "#f5f5f5" },
-                  { label: "IDLE Events",   value: eventStats.IDLE,         color: "#b8860b", bg: "#fdf8e8" },
-                  { label: "FAULT Events",  value: eventStats.FAULT,        color: "#c03030", bg: "#fef2f2" },
-                  { label: "Peak Hour",     value: peakHour,                color: "#5c35b0", bg: "#ebe8f8" },
+                  { label: "Total Events",  value: eventStats.total, color: "#5c35b0", bg: "#ebe8f8" },
+                  { label: "ON Events",     value: eventStats.ON, color: "#2e8b57", bg: "#f0faf4" },
+                  { label: "OFF Events",    value: eventStats.OFF, color: "#888",    bg: "#f5f5f5" },
+                  { label: "IDLE Events",   value: eventStats.IDLE, color: "#b8860b", bg: "#fdf8e8" },
+                  { label: "FAULT Events",  value: eventStats.FAULT, color: "#c03030", bg: "#fef2f2" },
+                  { label: "Peak Hour",     value: peakHour, color: "#5c35b0", bg: "#ebe8f8" },
                 ].map((s, i) => (
                   <div key={i} className="col-6 col-md-4 col-lg-2">
                     <div style={{ background: s.bg, borderRadius: "10px", padding: "10px 14px", textAlign: "center" }}>

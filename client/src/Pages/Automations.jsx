@@ -55,14 +55,14 @@ class AutomationFactory {
     });
 
     return {
-      id:         rule._id,
+      id: rule._id,
       _backendId: rule._id,
-      name:       rule.name,
+      name: rule.name,
       schedule,
-      trigger:    triggerType.toLowerCase(),
-      actions:    actionLabels,
-      isOn:       rule.isActive,
-      icon:       iconMap[triggerType] || Zap,
+      trigger: triggerType.toLowerCase(),
+      actions: actionLabels,
+      isOn: rule.isActive,
+      icon: iconMap[triggerType] || Zap,
       rawTrigger: rule.trigger,
       rawActions: rule.actions,
       lastRunAt:  rule.lastRunAt,
@@ -135,12 +135,12 @@ const deviceBelongsToUser = (device, roomIdSet) => {
 
 const suggested = [
   { id: "s1", name: "Bedtime Routine", desc: "Wind down your home at night", trigger: "schedule", icon: Moon  },
-  { id: "s2", name: "Wake Up",         desc: "Start your day right",          trigger: "schedule", icon: Sun   },
-  { id: "s3", name: "Vacation Mode",   desc: "Simulate presence while away",  trigger: "manual",   icon: Plane },
+  { id: "s2", name: "Wake Up", desc: "Start your day right", trigger: "schedule", icon: Sun   },
+  { id: "s3", name: "Vacation Mode", desc: "Simulate presence while away",  trigger: "manual",   icon: Plane },
 ];
 
-const ACCENT         = "#5c35b0";
-const GREEN          = "#63a17f";
+const ACCENT = "#5c35b0";
+const GREEN = "#63a17f";
 const ACTION_OPTIONS = ["ON", "OFF", "IDLE"];
 
 const Toggle = ({ isOn, onChange }) => (
@@ -206,15 +206,15 @@ const DeviceActionRow = ({ row, devices, loadingDevices, onChange, onRemove, sho
 const Automations = () => {
   const { token, user } = useAuth();
 
-  const [automations,    setAutomations]    = useState([]);
-  const [devices,        setDevices]        = useState([]);
+  const [automations, setAutomations]    = useState([]);
+  const [devices, setDevices] = useState([]);
   const [loadingAutos,   setLoadingAutos]   = useState(true);
   const [loadingDevices, setLoadingDevices] = useState(false);
-  const [online,         setOnline]         = useState(false);
+  const [online, setOnline] = useState(false);
 
-  const [history,      setHistory]      = useState([]);
+  const [history,      setHistory] = useState([]);
   const [runningId,    setRunningId]    = useState(null);
-  const [newModal,     setNewModal]     = useState(false);
+  const [newModal, setNewModal] = useState(false);
   const [settingsAuto, setSettingsAuto] = useState(null);
   const [submitError,  setSubmitError]  = useState("");
   const [submitting,   setSubmitting]   = useState(false);
@@ -234,7 +234,7 @@ const Automations = () => {
 
       // Get this user's home
       const homeData = await apiFetch("/homes/mine", tok);
-      const home     = homeData?.data?.home || homeData?.home;
+      const home = homeData?.data?.home || homeData?.home;
       const homeId   = home?.id || home?._id;
       if (!homeId) { setDevices([]); return []; }
 
@@ -261,11 +261,11 @@ const Automations = () => {
   const fetchAutomations = useCallback(async (devicesList = []) => {
     setLoadingAutos(true);
     try {
-      const tok        = token || localStorage.getItem("token");
+      const tok = token || localStorage.getItem("token");
       const currentUser = user || JSON.parse(localStorage.getItem("user") || "{}");
-      const userId     = currentUser?._id || currentUser?.id;
+      const userId = currentUser?._id || currentUser?.id;
       const strategy   = new LiveAutomationStrategy();
-      const data       = await strategy.fetch(tok, devicesList, userId);
+      const data = await strategy.fetch(tok, devicesList, userId);
       setAutomations(data);
       setOnline(true);
     } catch {
@@ -320,8 +320,8 @@ const Automations = () => {
   };
 
   const stats = useMemo(() => ({
-    total:    automations.length,
-    active:   automations.filter(a => a.isOn).length,
+    total: automations.length,
+    active: automations.filter(a => a.isOn).length,
     inactive: automations.filter(a => !a.isOn).length,
   }), [automations]);
 
@@ -363,7 +363,7 @@ const Automations = () => {
       () => apiFetch(`/automations/${updated._backendId}`, token, {
         method: "PATCH",
         body: JSON.stringify({
-          name:     updated.name,
+          name: updated.name,
           isActive: updated.isOn,
           trigger:  updated.rawTrigger,
         }),
@@ -422,9 +422,9 @@ const Automations = () => {
   };
 
   const handleAddSuggested = async (s) => {
-    const trigger     = { type: "TIME", time: "22:00" };
+    const trigger = { type: "TIME", time: "22:00" };
     const firstDevice = devices[0];
-    const actions     = firstDevice ? [{ device_id: firstDevice._id, action: "ON" }] : [];
+    const actions = firstDevice ? [{ device_id: firstDevice._id, action: "ON" }] : [];
     try {
       if (!actions.length) throw new Error("No devices");
       const data = await apiFetch("/automations", token, {
@@ -439,11 +439,11 @@ const Automations = () => {
     }
   };
 
-  const card         = { background: "white", borderRadius: "14px", boxShadow: "0 6px 15px rgba(0,0,0,0.06)", padding: "20px" };
+  const card = { background: "white", borderRadius: "14px", boxShadow: "0 6px 15px rgba(0,0,0,0.06)", padding: "20px" };
   const inputStyle   = { width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1.5px solid #e0dcea", fontSize: "14px", outline: "none", color: "#1a1a1a", background: "white", boxSizing: "border-box" };
-  const btnPrimary   = { background: submitting ? "#aaa" : GREEN, color: "white", border: "none", borderRadius: "8px", padding: "10px 20px", fontSize: "14px", fontWeight: "600", cursor: submitting ? "not-allowed" : "pointer" };
+  const btnPrimary = { background: submitting ? "#aaa" : GREEN, color: "white", border: "none", borderRadius: "8px", padding: "10px 20px", fontSize: "14px", fontWeight: "600", cursor: submitting ? "not-allowed" : "pointer" };
   const btnSecondary = { background: "#f0f0f0", color: "#555", border: "none", borderRadius: "8px", padding: "10px 20px", fontSize: "14px", fontWeight: "600", cursor: "pointer" };
-  const modalBox     = { position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", background: "white", borderRadius: "16px", boxShadow: "0 20px 60px rgba(0,0,0,0.20)", padding: "28px", width: "min(500px, 92vw)", zIndex: 1001, maxHeight: "88vh", overflowY: "auto", animation: "slideUp 0.25s ease" };
+  const modalBox = { position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", background: "white", borderRadius: "16px", boxShadow: "0 20px 60px rgba(0,0,0,0.20)", padding: "28px", width: "min(500px, 92vw)", zIndex: 1001, maxHeight: "88vh", overflowY: "auto", animation: "slideUp 0.25s ease" };
 
   const FieldLabel  = ({ text }) => <p style={{ margin: "0 0 6px", fontSize: "13px", fontWeight: "600", color: "#444" }}>{text}</p>;
   const ModalHeader = ({ title, onClose }) => (
@@ -502,8 +502,8 @@ const Automations = () => {
   };
 
   const statCards = [
-    { label: "Total",    value: stats.total,    accent: ACCENT,    bg: "#f3f0fc" },
-    { label: "Active",   value: stats.active,   accent: "#b8860b", bg: "#fdf8e8" },
+    { label: "Total", value: stats.total,    accent: ACCENT,    bg: "#f3f0fc" },
+    { label: "Active", value: stats.active,   accent: "#b8860b", bg: "#fdf8e8" },
     { label: "Inactive", value: stats.inactive, accent: "#5a85c8", bg: "#eef3fb" },
   ];
 
@@ -733,7 +733,7 @@ const Automations = () => {
       <style>{`
         @keyframes fadeIn  { from { opacity: 0 } to { opacity: 1 } }
         @keyframes slideUp { from { opacity: 0; transform: translate(-50%, -46%) } to { opacity: 1; transform: translate(-50%, -50%) } }
-        @keyframes spin    { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
+        @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
         h5 { font-size: 1.1rem; }
       `}</style>
     </Layout>
