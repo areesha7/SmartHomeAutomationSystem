@@ -2843,7 +2843,7 @@ export default function ModelingSimulation() {
     const interval = setInterval(async () => {
       const deviceIds = await fetchUserDevices();
       await fetchEvents(deviceIds);
-    }, 30000);
+    }, 600000);
     return () => clearInterval(interval);
   }, [token]);
 

@@ -300,7 +300,7 @@ const Analytics = () => {
     const id = setInterval(async () => { 
       const { deviceIds } = await fetchDevices(tok);
       await fetchEvents(deviceIds);
-    }, 30000);
+    }, 60000);
     return () => clearInterval(id);
   }, [token, user, fetchDevices, fetchEvents]);
 
