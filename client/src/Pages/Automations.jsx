@@ -969,8 +969,7 @@ const Automations = () => {
   const [settingsAuto, setSettingsAuto] = useState(null);
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [debugInfo, setDebugInfo] = useState(null);
-  const [manualRunResult, setManualRunResult] = useState(null);
+  const [runResult, setRunResult] = useState(null);
   const lastAutoRun = useRef({});
 
   const emptyForm = {
@@ -1037,80 +1036,121 @@ const Automations = () => {
     }
   }, [automations]);
 
-  const checkAndExecuteDueAutomations = useCallback(async () => {
-    if (!token || automations.length === 0) return;
+const checkAndExecuteDueAutomations = useCallback(async () => {
+  if (!token || automations.length === 0) return;
+  
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  const currentTimeStr = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`;
+  
+  console.log(`[Auto-Checker] Checking automations at ${currentTimeStr}`);
+  
+  const timeBasedAutos = automations.filter(auto => 
+    auto.isOn && 
+    auto.rawTrigger?.type === 'TIME' &&
+    auto.rawTrigger?.time
+  );
+  
+  if (timeBasedAutos.length > 0) {
+    console.log(`[Auto-Checker] Found ${timeBasedAutos.length} active time-based automations`);
+  }
+  
+  for (const auto of timeBasedAutos) {
+    const scheduledTime = auto.rawTrigger.time;
+    const [scheduledHour, scheduledMinute] = scheduledTime.split(':').map(Number);
     
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    const currentTimeStr = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`;
+    const timeMatch = currentHour === scheduledHour && currentMinute === scheduledMinute;
     
-    console.log(`[Auto-Checker] Checking automations at ${currentTimeStr}`);
+    const lastRun = lastAutoRun.current[auto._backendId];
+    const alreadyRanRecently = lastRun && (now.getTime() - lastRun) < 120000;
     
-    const timeBasedAutos = automations.filter(auto => 
-      auto.isOn && 
-      auto.rawTrigger?.type === 'TIME' &&
-      auto.rawTrigger?.time
-    );
-    
-    if (timeBasedAutos.length > 0) {
-      console.log(`[Auto-Checker] Found ${timeBasedAutos.length} active time-based automations`);
-    }
-    
-    for (const auto of timeBasedAutos) {
-      const scheduledTime = auto.rawTrigger.time;
-      const [scheduledHour, scheduledMinute] = scheduledTime.split(':').map(Number);
+    if (timeMatch && !alreadyRanRecently) {
+      console.log(`[Auto-Checker] 🎯 Executing automation: ${auto.name} at ${currentTimeStr} (scheduled: ${scheduledTime})`);
       
-      const timeMatch = currentHour === scheduledHour && currentMinute === scheduledMinute;
-      
-      const lastRun = lastAutoRun.current[auto._backendId];
-      const alreadyRanRecently = lastRun && (now.getTime() - lastRun) < 120000;
-      
-      if (timeMatch && !alreadyRanRecently) {
-        console.log(`[Auto-Checker] 🎯 Executing automation: ${auto.name} at ${currentTimeStr} (scheduled: ${scheduledTime})`);
+      // Check if automation has actions
+      if (!auto.rawActions || auto.rawActions.length === 0) {
+        console.error(`[Auto-Checker] ❌ Automation "${auto.name}" has no actions configured!`);
         
+        // Try to fetch fresh automation data from backend
         try {
-          const response = await apiFetch(`/automations/${auto._backendId}/run`, token, { method: "POST" });
-          console.log(`[Auto-Checker] ✅ Successfully executed: ${auto.name}`, response);
+          console.log(`[Auto-Checker] Attempting to fetch fresh data for ${auto.name}...`);
+          const freshData = await apiFetch(`/automations/${auto._backendId}`, token);
+          console.log(`[Auto-Checker] Fresh data:`, freshData);
           
-          lastAutoRun.current[auto._backendId] = now.getTime();
-          
-          if ("Notification" in window && Notification.permission === "granted") {
-            new Notification(`🤖 Automation Executed: ${auto.name}`, {
-              body: `Ran at ${currentTimeStr} as scheduled`,
-              icon: "https://cdn-icons-png.flaticon.com/512/1055/1055687.png"
-            });
+          const rule = freshData?.data?.rule || freshData?.rule;
+          if (rule && rule.actions && rule.actions.length > 0) {
+            console.log(`[Auto-Checker] Found ${rule.actions.length} actions in fresh data!`);
+            
+            // Execute actions from fresh data
+            for (const action of rule.actions) {
+              let deviceId = null;
+              if (typeof action.device === 'string') {
+                deviceId = action.device;
+              } else if (action.device?._id) {
+                deviceId = action.device._id;
+              } else if (action.device_id) {
+                deviceId = action.device_id;
+              }
+              
+              if (deviceId) {
+                console.log(`[Auto-Checker] Executing ${action.action} on device ${deviceId}`);
+                try {
+                  await apiFetch(`/devices/${deviceId}/control`, token, {
+                    method: "POST",
+                    body: JSON.stringify({ action: action.action })
+                  });
+                  console.log(`[Auto-Checker] ✅ Executed ${action.action}`);
+                } catch (err) {
+                  console.error(`[Auto-Checker] ❌ Failed to execute action:`, err);
+                }
+              }
+            }
+          } else {
+            console.error(`[Auto-Checker] ❌ Still no actions found for "${auto.name}"`);
+          }
+        } catch (err) {
+          console.error(`[Auto-Checker] ❌ Failed to fetch fresh data:`, err);
+        }
+      } else {
+        // Execute actions from existing automation
+        console.log(`[Auto-Checker] Executing ${auto.rawActions.length} actions for "${auto.name}"`);
+        
+        for (const action of auto.rawActions) {
+          let deviceId = null;
+          if (typeof action.device === 'string') {
+            deviceId = action.device;
+          } else if (action.device?._id) {
+            deviceId = action.device._id;
+          } else if (action.device_id) {
+            deviceId = action.device_id;
           }
           
-          setTimeout(async () => {
-            const devicesList = await fetchDevices();
-            await fetchAutomations(devicesList, true);
-          }, 30000);
-          
-        } catch (error) {
-          console.error(`[Auto-Checker] ❌ Failed to execute ${auto.name}:`, error);
+          if (deviceId) {
+            console.log(`[Auto-Checker] Executing ${action.action} on device ${deviceId}`);
+            try {
+              await apiFetch(`/devices/${deviceId}/control`, token, {
+                method: "POST",
+                body: JSON.stringify({ action: action.action })
+              });
+              console.log(`[Auto-Checker] ✅ Executed ${action.action}`);
+            } catch (err) {
+              console.error(`[Auto-Checker] ❌ Failed to execute action:`, err);
+            }
+          }
         }
       }
+      
+      lastAutoRun.current[auto._backendId] = now.getTime();
+      
+      // Refresh devices after execution
+      setTimeout(async () => {
+        const devicesList = await fetchDevices();
+        await fetchAutomations(devicesList, true);
+      }, 30000);
     }
-  }, [automations, token, fetchDevices, fetchAutomations]);
-
-  useEffect(() => {
-    if (!token || automations.length === 0) return;
-    
-    checkAndExecuteDueAutomations();
-    
-    const interval = setInterval(() => {
-      checkAndExecuteDueAutomations();
-    }, 35000);
-    
-    return () => clearInterval(interval);
-  }, [token, automations, checkAndExecuteDueAutomations]);
-
-  useEffect(() => {
-    if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
-    }
-  }, []);
+  }
+}, [automations, token, fetchDevices, fetchAutomations]);
 
   useEffect(() => {
     const tok = token || localStorage.getItem("token");
@@ -1165,6 +1205,14 @@ const Automations = () => {
       setSubmitError("");
     }
   }, [newModal]);
+
+  // Clear run result after 5 seconds
+  useEffect(() => {
+    if (runResult) {
+      const timer = setTimeout(() => setRunResult(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [runResult]);
 
   const dispatch = (command, apiCall) => {
     setAutomations(prev => {
@@ -1278,49 +1326,121 @@ const Automations = () => {
     }
   };
 
+  // FIXED: Complete runNow function that works with existing backend
   const runNow = async (auto) => {
     setRunningId(auto.id);
-    setDebugInfo(null);
-    setManualRunResult(null);
+    setRunResult(null);
     
     try {
       console.log("=== RUNNING AUTOMATION MANUALLY ===");
       console.log("Automation:", auto.name);
-      console.log("Actions:", auto.rawActions);
+      console.log("Automation ID:", auto._backendId);
+      console.log("Raw Actions:", auto.rawActions);
       
-      const response = await apiFetch(`/automations/${auto._backendId}/run`, token, { method: "POST" });
+      // Check if there are actions
+      if (!auto.rawActions || auto.rawActions.length === 0) {
+        throw new Error("No actions configured for this automation");
+      }
       
-      console.log("Run response:", response);
+      // Execute actions directly via device control endpoint
+      const actionResults = [];
+      let allSuccessful = true;
       
-      setDebugInfo({
-        automation: auto.name,
-        actions: auto.rawActions,
-        response: response,
-        timestamp: new Date().toLocaleTimeString()
-      });
+      for (let i = 0; i < auto.rawActions.length; i++) {
+        const action = auto.rawActions[i];
+        
+        // Extract device ID from various possible formats
+        let deviceId = null;
+        if (typeof action.device === 'string') {
+          deviceId = action.device;
+        } else if (action.device?._id) {
+          deviceId = action.device._id;
+        } else if (action.device_id) {
+          deviceId = action.device_id;
+        } else if (action.device?.toString && action.device.toString() !== '[object Object]') {
+          deviceId = action.device.toString();
+        }
+        
+        if (!deviceId) {
+          console.error(`Action ${i}: Could not extract device ID from:`, action);
+          actionResults.push({ 
+            actionNumber: i + 1,
+            action: action.action, 
+            error: "No device ID found",
+            success: false 
+          });
+          allSuccessful = false;
+          continue;
+        }
+        
+        console.log(`Action ${i + 1}: Executing ${action.action} on device ${deviceId}`);
+        
+        try {
+          // Call the device control endpoint
+          const controlResponse = await apiFetch(`/devices/${deviceId}/control`, token, {
+            method: "POST",
+            body: JSON.stringify({ action: action.action })
+          });
+          
+          actionResults.push({
+            actionNumber: i + 1,
+            deviceId: deviceId,
+            action: action.action,
+            success: true,
+            response: controlResponse
+          });
+          
+          console.log(`Action ${i + 1}: ✅ Successfully executed ${action.action}`);
+          
+          // Small delay between actions
+          if (i < auto.rawActions.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+          
+        } catch (actionError) {
+          console.error(`Action ${i + 1}: ❌ Failed:`, actionError);
+          actionResults.push({
+            actionNumber: i + 1,
+            action: action.action,
+            error: actionError.message,
+            success: false
+          });
+          allSuccessful = false;
+        }
+      }
       
-      setManualRunResult({
-        success: true,
-        message: `✅ "${auto.name}" executed successfully! Check your device.`,
-        timestamp: new Date().toLocaleTimeString()
-      });
+      // Set result message
+      if (allSuccessful) {
+        setRunResult({
+          success: true,
+          automationName: auto.name,
+          message: `✅ "${auto.name}" executed successfully! ${actionResults.length} action(s) completed.`,
+          details: actionResults,
+          timestamp: new Date().toLocaleTimeString()
+        });
+      } else {
+        const successCount = actionResults.filter(r => r.success).length;
+        setRunResult({
+          success: false,
+          automationName: auto.name,
+          message: `⚠️ "${auto.name}" partially executed. ${successCount}/${actionResults.length} actions succeeded.`,
+          details: actionResults,
+          timestamp: new Date().toLocaleTimeString()
+        });
+      }
       
+      // Refresh devices and automations after execution
       setTimeout(async () => {
         const devicesList = await fetchDevices();
         await fetchAutomations(devicesList, true);
-        setManualRunResult(prev => prev ? { ...prev, refreshed: true } : prev);
       }, 1000);
       
     } catch (err) {
-      console.error("Run failed:", err.message);
-      setDebugInfo({
-        automation: auto.name,
-        error: err.message,
-        timestamp: new Date().toLocaleTimeString()
-      });
-      setManualRunResult({
+      console.error("Run failed:", err);
+      setRunResult({
         success: false,
-        message: `❌ Failed: ${err.message}`,
+        automationName: auto.name,
+        message: `❌ Failed to execute "${auto.name}": ${err.message}`,
         timestamp: new Date().toLocaleTimeString()
       });
     } finally {
@@ -1419,8 +1539,6 @@ const Automations = () => {
     { label: "Inactive", value: stats.inactive, accent: "#5a85c8", bg: "#eef3fb" },
   ];
 
-  const timeBasedCount = automations.filter(a => a.isOn && a.rawTrigger?.type === 'TIME').length;
-
   return (
     <Layout>
       <div style={{ minHeight: "100vh", background: "linear-gradient(135deg,#f8f9fa,#eef3f7)" }}>
@@ -1428,25 +1546,6 @@ const Automations = () => {
         <div className="container-fluid d-flex align-items-center justify-content-between" style={{ padding: "16px 24px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
             <StatusPill online={online} loading={loadingAutos} />
-            {/* <span style={{ fontSize: "12px", color: "#888", display: "flex", alignItems: "center", gap: "4px", background: "#f0f0f0", padding: "4px 10px", borderRadius: "20px" }}>
-              <Clock size={12} />
-              Auto-checker: Every 15s
-              {timeBasedCount > 0 && (
-                <span style={{ marginLeft: "4px", color: GREEN, fontWeight: "600" }}>
-                  ({timeBasedCount} active)
-                </span>
-              )}
-            </span> */}
-            {/* <button 
-              onClick={async () => {
-                console.log("Manually refreshing devices...");
-                const devicesList = await fetchDevices();
-                await fetchAutomations(devicesList, true);
-                alert(`✅ Devices refreshed! Found ${devicesList.length} devices.`);
-              }}
-              style={{ background: "#5c35b0", border: "1px solid #5c35b0", borderRadius: "8px", gap: "6px", fontSize: "12px", fontWeight: 600, padding: "4px 12px", color: "white", display: "flex", alignItems: "center", cursor: "pointer" }}>
-              <RotateCcw size={12} /> Refresh Devices
-            </button> */}
             {history.length > 0 && (
               <button onClick={undoLast}
                 style={{ background: "#63a17f", border: "1px solid rgba(255,255,255,0.35)", borderRadius: "8px", padding: "5px 12px", cursor: "pointer", color: "white", fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "5px" }}>
@@ -1468,94 +1567,42 @@ const Automations = () => {
             <p style={{ margin: 0, fontSize: "14px", color: "#777" }}>Create and manage your smart home routines</p>
           </div>
 
-          {/* Manual Run Result */}
-          {/* {manualRunResult && (
-            <div style={{ ...card, marginBottom: "20px", background: manualRunResult.success ? "#e8f5ee" : "#fee8e8", border: `1px solid ${manualRunResult.success ? "#63a17f" : "#c03030"}` }}>
+          {/* Run Result Notification */}
+          {runResult && (
+            <div style={{ 
+              ...card, 
+              marginBottom: "20px", 
+              background: runResult.success ? "#e8f5ee" : "#fee8e8", 
+              border: `1px solid ${runResult.success ? "#63a17f" : "#c03030"}`,
+              animation: "slideDown 0.3s ease"
+            }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div>
-                  <p style={{ margin: 0, fontWeight: "600", color: manualRunResult.success ? GREEN : "#c03030" }}>
-                    {manualRunResult.message}
+                <div style={{ flex: 1 }}>
+                  <p style={{ margin: 0, fontWeight: "600", color: runResult.success ? GREEN : "#c03030" }}>
+                    {runResult.message}
                   </p>
-                  <p style={{ margin: "4px 0 0", fontSize: "11px", color: "#888" }}>Time: {manualRunResult.timestamp}</p>
+                  <p style={{ margin: "4px 0 0", fontSize: "11px", color: "#888" }}>
+                    {runResult.timestamp}
+                  </p>
+                  {runResult.details && runResult.details.length > 0 && (
+                    <details style={{ marginTop: "8px" }}>
+                      <summary style={{ fontSize: "11px", cursor: "pointer", color: "#666" }}>View details</summary>
+                      <div style={{ marginTop: "6px", fontSize: "11px" }}>
+                        {runResult.details.map((detail, idx) => (
+                          <div key={idx} style={{ padding: "2px 0", color: detail.success ? GREEN : "#c03030" }}>
+                            Action {detail.actionNumber}: {detail.action} - {detail.success ? "✓ Success" : `✗ ${detail.error}`}
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
                 </div>
-                <button onClick={() => setManualRunResult(null)} style={{ background: "none", border: "none", cursor: "pointer" }}>
+                <button onClick={() => setRunResult(null)} style={{ background: "none", border: "none", cursor: "pointer" }}>
                   <X size={16} color="#888" />
                 </button>
               </div>
             </div>
-          )} */}
-
-          {/* Debug Info Panel */}
-          {/* {debugInfo && (
-            <div style={{ ...card, marginBottom: "20px", background: "#fef9e8", border: "1px solid #e0de80" }}>
-              <details open>
-                <summary style={{ cursor: "pointer", fontWeight: "600", color: "#b8860b" }}>🔍 Last Run Debug Info</summary>
-                <div style={{ marginTop: "12px", fontSize: "12px" }}>
-                  <p><strong>Time:</strong> {debugInfo.timestamp}</p>
-                  <p><strong>Automation:</strong> {debugInfo.automation}</p>
-                  {debugInfo.error ? (
-                    <p style={{ color: "#c03030" }}><strong>Error:</strong> {debugInfo.error}</p>
-                  ) : (
-                    <>
-                      <p><strong>Actions Sent:</strong></p>
-                      <pre style={{ background: "#f0f0f0", padding: "8px", borderRadius: "6px", overflow: "auto" }}>
-                        {JSON.stringify(debugInfo.actions, null, 2)}
-                      </pre>
-                      <p><strong>Response:</strong></p>
-                      <pre style={{ background: "#f0f0f0", padding: "8px", borderRadius: "6px", overflow: "auto" }}>
-                        {JSON.stringify(debugInfo.response, null, 2)}
-                      </pre>
-                    </>
-                  )}
-                </div>
-              </details>
-            </div>
-          )} */}
-
-          {/* Manual Test Section */}
-          {/* <div style={{ ...card, marginBottom: "20px", background: "#e8f5ee", border: "1px solid #63a17f" }}>
-            <details>
-              <summary style={{ cursor: "pointer", fontWeight: "600", color: GREEN }}>🔧 Manual Test - Force Run Automation</summary><div style={{ marginTop: "12px" }}>
-                <p style={{ fontSize: "12px", marginBottom: "8px" }}>Click a button below to manually run an automation (ignores schedule):</p>
-                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                  {automations.filter(a => a.isOn && a.rawTrigger?.type === 'TIME').map(auto => (
-                    <button
-                      key={auto.id}
-                      onClick={async () => {
-                        console.log(`[Manual Test] Force running: ${auto.name}`);
-                        try {
-                          const response = await apiFetch(`/automations/${auto._backendId}/run`, token, { method: "POST" });
-                          console.log(`[Manual Test] Response:`, response);
-                          setManualRunResult({
-                            success: true,
-                            message: `✅ "${auto.name}" executed successfully! Check your device.`,
-                            timestamp: new Date().toLocaleTimeString()
-                          });
-                          setTimeout(async () => {
-                            const devicesList = await fetchDevices();
-                            await fetchAutomations(devicesList, true);
-                          }, 1000);
-                        } catch (error) {
-                          console.error(`[Manual Test] Failed:`, error);
-                          setManualRunResult({
-                            success: false,
-                            message: `❌ Failed: ${error.message}`,
-                            timestamp: new Date().toLocaleTimeString()
-                          });
-                        }
-                      }}
-                      style={{ padding: "6px 12px", background: GREEN, color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "12px" }}
-                    >
-                      Run: {auto.name}
-                    </button>
-                  ))}
-                  {automations.filter(a => a.isOn && a.rawTrigger?.type === 'TIME').length === 0 && (
-                    <p style={{ fontSize: "12px", color: "#888" }}>No active time-based automations found</p>
-                  )}
-                </div>
-              </div>
-            </details>
-          </div> */}
+          )}
 
           <div className="row g-3" style={{ marginBottom: "32px" }}>
             {statCards.map((s, i) => (
@@ -1755,6 +1802,7 @@ const Automations = () => {
       <style>{`
         @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
         @keyframes slideUp { from { opacity: 0; transform: translate(-50%, -46%) } to { opacity: 1; transform: translate(-50%, -50%) } }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px) } to { opacity: 1; transform: translateY(0) } }
         @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
         h5 { font-size: 1.1rem; }
       `}</style>
