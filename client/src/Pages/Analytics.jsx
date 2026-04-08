@@ -362,7 +362,7 @@ const Analytics = () => {
                   { label: "IDLE", value: deviceStats.idle,                                                                       color: "#b8860b", bg: "#fdf8e8" },
                   { label: "FAULT", value: deviceStats.fault,                                                                      color: "#c03030", bg: "#fef2f2" },
                   { label: "Live Power", value: `${deviceStats.livePowerW}W`,                                                           color: "#b8860b", bg: "#fdf8e8" },
-                  { label: "Capacity", value: `${deviceStats.totalCapacityW}W`,                                                       color: "#5c35b0", bg: "#f2f0fa" },
+                  { label: "Total", value: `${deviceStats.totalCapacityW}W`,                                                       color: "#5c35b0", bg: "#f2f0fa" },
                   { label: "Utilization",   value: `${utilizationPct}%`,                                                                   color: "#5c35b0", bg: "#f2f0fa" },
                   { label: "Health Score",  value: `${deviceStats.healthScore}%`, color: deviceStats.healthScore > 80 ? "#2e8b57" : "#c03030", bg: deviceStats.healthScore > 80 ? "#f0faf4" : "#fef2f2" },
                 ].map((s, i) => (
