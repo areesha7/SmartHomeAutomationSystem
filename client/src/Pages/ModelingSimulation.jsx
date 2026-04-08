@@ -38,7 +38,7 @@
 // // const filterEventsByUserDevices = (events, userDeviceIds) => {
 // //   if (!events || events.length === 0) return [];
 // //   if (!userDeviceIds || userDeviceIds.size === 0) return [];
-  
+
 // //   return events.filter(event => {
 // //     const deviceId = event.device?.toString() || 
 // //                      event.deviceId?.toString() ||
@@ -250,7 +250,7 @@
 // //       const homeRes = await axios.get(`${API}/homes/mine`, { headers });
 // //       const home = homeRes.data?.data?.home || homeRes.data?.home;
 // //       const homeId = home?.id || home?._id;
-      
+
 // //       if (!homeId) {
 // //         setFilteredDevices([]);
 // //         setAllDevices([]);
@@ -270,7 +270,7 @@
 // //       // Filter devices to only this home's rooms
 // //       const filtered = allDevs.filter(d => deviceBelongsToUser(d, roomIdSet));
 // //       setFilteredDevices(filtered);
-      
+
 
 // //       const deviceIds = new Set(filtered.map(d => d._id?.toString() || d.id?.toString()));
 // //       return deviceIds;
@@ -291,8 +291,8 @@
 // //       const res = await axios.get(`${API}/events/recent?limit=500`, { headers });
 // //       const rawEvents = res.data?.data?.events || res.data?.events || [];
 // //       setAllEvents(rawEvents);
-      
-     
+
+
 // //       if (deviceIds && deviceIds.size > 0) {
 // //         const filtered = filterEventsByUserDevices(rawEvents, deviceIds);
 // //         setFilteredEvents(filtered);
@@ -321,7 +321,7 @@
 // //       const deviceIds = await fetchUserDevices();
 // //       await fetchEvents(deviceIds);
 // //     }, 30000);
-    
+
 // //     return () => clearInterval(interval);
 // //   }, [token]);
 
@@ -415,7 +415,7 @@
 // //     try {
 // //       setControlling(deviceId);
 // //       await axios.post(`${API}/devices/${deviceId}/control`, { action }, { headers });
-  
+
 // //       const deviceIds = await fetchUserDevices();
 // //       await fetchEvents(deviceIds);
 // //     } catch (e) {
@@ -893,7 +893,7 @@
 // const filterEventsByUserDevices = (events, userDeviceIds) => {
 //   if (!events || events.length === 0) return [];
 //   if (!userDeviceIds || userDeviceIds.size === 0) return [];
-  
+
 //   return events.filter(event => {
 //     const deviceId = event.device?.toString() || 
 //                      event.deviceId?.toString() ||
@@ -1109,7 +1109,7 @@
 //       const home = homeRes.data?.data?.home || homeRes.data?.home;
 //       const homeId = home?.id || home?._id;
 //       setHomeId(homeId);
-      
+
 //       if (!homeId) {
 //         setFilteredDevices([]);
 //         setAllDevices([]);
@@ -1129,7 +1129,7 @@
 //       // Filter devices to only this home's rooms
 //       const filtered = allDevs.filter(d => deviceBelongsToUser(d, roomIdSet));
 //       setFilteredDevices(filtered);
-      
+
 
 //       const deviceIds = new Set(filtered.map(d => d._id?.toString() || d.id?.toString()));
 //       return deviceIds;
@@ -1182,8 +1182,8 @@
 //       const res = await axios.get(`${API}/events/recent?limit=500`, { headers });
 //       const rawEvents = res.data?.data?.events || res.data?.events || [];
 //       setAllEvents(rawEvents);
-      
-     
+
+
 //       if (deviceIds && deviceIds.size > 0) {
 //         const filtered = filterEventsByUserDevices(rawEvents, deviceIds);
 //         setFilteredEvents(filtered);
@@ -1212,7 +1212,7 @@
 //       const deviceIds = await fetchUserDevices();
 //       await fetchEvents(deviceIds);
 //     }, 30000);
-    
+
 //     return () => clearInterval(interval);
 //   }, [token]);
 
@@ -1307,7 +1307,7 @@
 //     try {
 //       setControlling(deviceId);
 //       await axios.post(`${API}/devices/${deviceId}/control`, { action }, { headers });
-  
+
 //       const deviceIds = await fetchUserDevices();
 //       await fetchEvents(deviceIds);
 //     } catch (e) {
@@ -2526,16 +2526,16 @@ import { Activity, GitBranch, Zap, Play, RotateCcw, CheckCircle, RefreshCw } fro
 
 const API = import.meta.env.VITE_API_URL;
 const STATES = ["OFF", "ON", "IDLE", "FAULT"];
-const GREEN  = "#63a17f";
+const GREEN = "#63a17f";
 const ACCENT = "#5c35b0";
-const GOLD   = "#b8860b";
+const GOLD = "#b8860b";
 const STATE_COLORS = { OFF: "#90A4AE", ON: "#63a17f", IDLE: "#b8860b", FAULT: "#c03030" };
 
 const buildRoomIdSet = (rooms) => {
   const ids = new Set();
   rooms.forEach(r => {
     if (r._id) ids.add(r._id.toString());
-    if (r.id)  ids.add(r.id.toString());
+    if (r.id) ids.add(r.id.toString());
   });
   return ids;
 };
@@ -2554,8 +2554,8 @@ const filterEventsByUserDevices = (events, userDeviceIds) => {
   if (!userDeviceIds || userDeviceIds.size === 0) return [];
   return events.filter(event => {
     const deviceId = event.device?.toString() ||
-                     event.deviceId?.toString() ||
-                     event.device_id?.toString();
+      event.deviceId?.toString() ||
+      event.device_id?.toString();
     return deviceId && userDeviceIds.has(deviceId);
   });
 };
@@ -2601,19 +2601,18 @@ const simulationMap = {
   emergency: new EmergencySimulation(),
 };
 
-const buildPoissonChart = (events) => {
+const buildPoissonChart = (events, lambdaPerHour) => {
   if (!events.length) return [];
   const buckets = {};
   events.forEach(ev => {
-    const h   = new Date(ev.timestamp).getHours();
+    const h = new Date(ev.timestamp).getHours();
     const key = `${String(h).padStart(2, "0")}:00`;
     buckets[key] = (buckets[key] || 0) + 1;
   });
-  const hours  = Object.keys(buckets).length || 1;
-  const lambda = parseFloat((events.length / hours).toFixed(2));
+  // expected per bucket = λ × 1h (each bucket is 1 hour wide)
   return Object.entries(buckets)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([time, arrivals]) => ({ time, arrivals, expected: lambda }));
+    .map(([time, arrivals]) => ({ time, arrivals, expected: lambdaPerHour }));
 };
 
 const buildMarkovMatrix = (events) => {
@@ -2630,12 +2629,12 @@ const buildMarkovMatrix = (events) => {
     const sorted = devEvents.sort((a, b) => a.ts - b.ts);
     for (let i = 0; i < sorted.length - 1; i++) {
       const from = sorted[i].action;
-      const to   = sorted[i + 1].action;
+      const to = sorted[i + 1].action;
       if (STATES.includes(from) && STATES.includes(to)) counts[from][to]++;
     }
   });
   return STATES.map(from => {
-    const row   = STATES.map(to => counts[from][to]);
+    const row = STATES.map(to => counts[from][to]);
     const total = row.reduce((a, b) => a + b, 0);
     return total === 0
       ? STATES.map((_, i) => (i === STATES.indexOf(from) ? 1 : 0))
@@ -2654,12 +2653,10 @@ const computeSteadyState = (matrix) => {
   }
   return state;
 };
-
+const WINDOW_HOURS = 24;
 const computeLambda = (events) => {
-  if (events.length < 2) return events.length;
-  const sorted    = events.map(e => new Date(e.timestamp)).sort((a, b) => a - b);
-  const spanHours = (sorted[sorted.length - 1] - sorted[0]) / 3600000;
-  return spanHours > 0 ? parseFloat((events.length / spanHours).toFixed(2)) : events.length;
+  // MLE for Poisson: λ = N / T where T is the fixed observation window
+  return parseFloat((events.length / WINDOW_HOURS).toFixed(4));
 };
 
 const SectionHeader = ({ title, subtitle, icon: Icon, color }) => (
@@ -2689,24 +2686,24 @@ const StatusBadge = ({ status }) => {
 export default function ModelingSimulation() {
   const { token, user } = useAuth();
 
-  const [allEvents,      setAllEvents]      = useState([]);
+  const [allEvents, setAllEvents] = useState([]);
   const [filteredEvents, setFilteredEvents] = useState([]);
-  const [allDevices,     setAllDevices]     = useState([]);
-  const [filteredDevices,setFilteredDevices]= useState([]);
-  const [loadingEv,      setLoadingEv]      = useState(true);
-  const [loadingDev,     setLoadingDev]     = useState(true);
-  const [error,          setError]          = useState("");
+  const [allDevices, setAllDevices] = useState([]);
+  const [filteredDevices, setFilteredDevices] = useState([]);
+  const [loadingEv, setLoadingEv] = useState(true);
+  const [loadingDev, setLoadingDev] = useState(true);
+  const [error, setError] = useState("");
   const [selectedDevice, setSelectedDevice] = useState("all");
-  const [simMode,        setSimMode]        = useState("normal");
-  const [simResults,     setSimResults]     = useState([]);
-  const [simRunning,     setSimRunning]     = useState(false);
-  const [controlling,    setControlling]    = useState(null);
-  const [backendMarkov,  setBackendMarkov]  = useState(null);
-  const [markovSource,   setMarkovSource]   = useState("frontend");
-  const [homeId,         setHomeId]         = useState(null);
+  const [simMode, setSimMode] = useState("normal");
+  const [simResults, setSimResults] = useState([]);
+  const [simRunning, setSimRunning] = useState(false);
+  const [controlling, setControlling] = useState(null);
+  const [backendMarkov, setBackendMarkov] = useState(null);
+  const [markovSource, setMarkovSource] = useState("frontend");
+  const [homeId, setHomeId] = useState(null);
   // ADD MISSING STATE VARIABLES FOR BACKEND LAMBDA
-  const [backendLambda,  setBackendLambda]  = useState(null);
-  const [loadingLambda,  setLoadingLambda]  = useState(false);
+  const [backendLambda, setBackendLambda] = useState(null);
+  const [loadingLambda, setLoadingLambda] = useState(false);
 
   const scenarioMap = {
     normal: "NORMAL", peak: "HIGH_USAGE", energy: "ENERGY_SAVING",
@@ -2725,18 +2722,18 @@ export default function ModelingSimulation() {
       const headers = getHeaders();
 
       const homeRes = await axios.get(`${API}/homes/mine`, { headers });
-      const home    = homeRes.data?.data?.home || homeRes.data?.home;
-      const hId     = home?.id || home?._id;
+      const home = homeRes.data?.data?.home || homeRes.data?.home;
+      const hId = home?.id || home?._id;
       setHomeId(hId);
 
       if (!hId) { setFilteredDevices([]); setAllDevices([]); return new Set(); }
 
-      const roomsRes  = await axios.get(`${API}/rooms/${hId}/rooms`, { headers });
-      const roomList  = roomsRes.data?.data?.rooms || roomsRes.data?.rooms || [];
+      const roomsRes = await axios.get(`${API}/rooms/${hId}/rooms`, { headers });
+      const roomList = roomsRes.data?.data?.rooms || roomsRes.data?.rooms || [];
       const roomIdSet = buildRoomIdSet(roomList);
 
       const devicesRes = await axios.get(`${API}/devices`, { headers });
-      const allDevs    = devicesRes.data?.data?.devices || devicesRes.data?.devices || [];
+      const allDevs = devicesRes.data?.data?.devices || devicesRes.data?.devices || [];
       setAllDevices(allDevs);
 
       // Filter to only this home's rooms — no rooms = no devices
@@ -2756,7 +2753,7 @@ export default function ModelingSimulation() {
 
   const fetchBackendMarkov = async (deviceId) => {
     try {
-      const res  = await axios.get(`${API}/model/device/${deviceId}/markov`, { headers: getHeaders() });
+      const res = await axios.get(`${API}/model/device/${deviceId}/markov`, { headers: getHeaders() });
       const data = res.data?.data || res.data;
       if (!data?.matrix) return null;
       const arr = STATES.map(from => STATES.map(to => data.matrix[from]?.[to] ?? 0));
@@ -2770,7 +2767,7 @@ export default function ModelingSimulation() {
       setBackendLambda(null);
       return null;
     }
-    
+
     try {
       setLoadingLambda(true);
       const windowHours = 24;
@@ -2793,14 +2790,14 @@ export default function ModelingSimulation() {
   const handleDeviceSelect = async (deviceId) => {
     setSelectedDevice(deviceId);
     if (deviceId === "all") {
-      setBackendMarkov(null); 
-      setBackendLambda(null); 
+      setBackendMarkov(null);
+      setBackendLambda(null);
       setMarkovSource("frontend");
     } else {
       const markovResult = await fetchBackendMarkov(deviceId);
       const lambdaResult = await fetchBackendLambda(deviceId);
       if (markovResult) { setBackendMarkov(markovResult); setMarkovSource("backend"); }
-      else              { setBackendMarkov(null);          setMarkovSource("frontend"); }
+      else { setBackendMarkov(null); setMarkovSource("frontend"); }
       if (lambdaResult) setBackendLambda(lambdaResult);
     }
   };
@@ -2808,7 +2805,7 @@ export default function ModelingSimulation() {
   const fetchEvents = async (deviceIds = null) => {
     try {
       setLoadingEv(true);
-      const res       = await axios.get(`${API}/events/recent?limit=500`, { headers: getHeaders() });
+      const res = await axios.get(`${API}/events/recent?limit=500`, { headers: getHeaders() });
       const rawEvents = res.data?.data?.events || res.data?.events || [];
       setAllEvents(rawEvents);
 
@@ -2847,7 +2844,7 @@ export default function ModelingSimulation() {
     return () => clearInterval(interval);
   }, [token]);
 
-  const events  = filteredEvents;
+  const events = filteredEvents;
   const devices = filteredDevices;
 
   const filteredEventsByDevice = useMemo(() => {
@@ -2858,11 +2855,14 @@ export default function ModelingSimulation() {
     });
   }, [events, selectedDevice]);
 
-  const poissonChart   = useMemo(() => buildPoissonChart(filteredEventsByDevice), [filteredEventsByDevice]);
-  const lambda         = useMemo(() => computeLambda(filteredEventsByDevice),      [filteredEventsByDevice]);
+  const lambda = useMemo(() => computeLambda(filteredEventsByDevice), [filteredEventsByDevice]);
+  const chartLambda = (selectedDevice !== "all" && backendLambda)
+    ? backendLambda.lambdaPerHour
+    : lambda;
+  const poissonChart = useMemo(() => buildPoissonChart(filteredEventsByDevice, chartLambda), [filteredEventsByDevice, chartLambda]);
   const frontendMarkov = useMemo(() => buildMarkovMatrix(events), [events]);
-  const markovMatrix   = backendMarkov ? backendMarkov.matrix : frontendMarkov;
-  const steadyState    = useMemo(() => computeSteadyState(markovMatrix), [markovMatrix]);
+  const markovMatrix = backendMarkov ? backendMarkov.matrix : frontendMarkov;
+  const steadyState = useMemo(() => computeSteadyState(markovMatrix), [markovMatrix]);
 
   const actionCounts = useMemo(() => {
     const c = { ON: 0, OFF: 0, IDLE: 0, FAULT: 0 };
@@ -2891,7 +2891,7 @@ export default function ModelingSimulation() {
     setSimRunning(true);
     try {
       const backendScenario = scenarioMap[simMode];
-      const durationHours   = Math.max(0.1, parseFloat(spanHours.toFixed(1)));
+      const durationHours = Math.max(0.1, parseFloat(spanHours.toFixed(1)));
       const res = await axios.post(
         `${API}/simulation/run`,
         { scenario: backendScenario, duration_hours: durationHours },
@@ -2903,9 +2903,9 @@ export default function ModelingSimulation() {
       });
       const merged = {
         ...localResult, id: Date.now(),
-        energyKwh:       data.energyKwh ?? localResult.energyKwh,
+        energyKwh: data.energyKwh ?? localResult.energyKwh,
         avgResponseTime: data.avgResponseTimeMs ?? localResult.avgResponseTime,
-        utilization:     data.utilization != null ? (data.utilization / 100).toFixed(2) : localResult.utilization,
+        utilization: data.utilization != null ? (data.utilization / 100).toFixed(2) : localResult.utilization,
       };
       setSimResults(prev => [merged, ...prev].slice(0, 5));
 
@@ -2931,11 +2931,11 @@ export default function ModelingSimulation() {
 
   const comparisonData = simResults.length > 1
     ? simResults.slice(0, 5).reverse().map(r => ({
-        label: r.label.split(" ")[0],
-        responseTime: parseFloat(r.avgResponseTime),
-        utilization:  parseFloat((r.utilization * 100).toFixed(1)),
-        stability:    parseFloat(r.stability),
-      }))
+      label: r.label.split(" ")[0],
+      responseTime: parseFloat(r.avgResponseTime),
+      utilization: parseFloat((r.utilization * 100).toFixed(1)),
+      stability: parseFloat(r.stability),
+    }))
     : null;
 
   const inputStyle = { padding: "8px 12px", borderRadius: "8px", border: "1.5px solid #e0dcea", fontSize: "14px", outline: "none", color: "#1a1a1a", background: "white", width: "100%", boxSizing: "border-box" };
@@ -3009,11 +3009,11 @@ export default function ModelingSimulation() {
                       <p style={{ margin: 0, fontSize: "11px", color: "#aaa" }}>events / hour</p>
                     </div> */}
 
-                    
+
                     {selectedDevice !== "all" && backendLambda && (
                       <div style={{ padding: "12px", background: "linear-gradient(135deg, #667eea08, #764ba208)", borderRadius: "10px", border: "1px solid #667eea40" }}>
                         <p style={{ margin: "0 0 2px", fontSize: "11px", fontWeight: "700", color: "#667eea", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                          Calculated λ 
+                          Calculated λ
                         </p>
                         <p style={{ margin: 0, fontSize: "28px", fontWeight: "800", color: "#667eea", lineHeight: 1 }}>
                           {backendLambda.lambdaPerHour}
@@ -3037,9 +3037,13 @@ export default function ModelingSimulation() {
                     )}
 
                     <div style={{ padding: "12px", background: "#f3f0fc", borderRadius: "10px", border: "1px solid #d4c8f0" }}>
-                      <p style={{ margin: "0 0 2px", fontSize: "11px", fontWeight: "700", color: ACCENT, textTransform: "uppercase", letterSpacing: "0.05em" }}>E[X] = Var[X] = λ</p>
-                      <p style={{ margin: 0, fontSize: "22px", fontWeight: "800", color: ACCENT, lineHeight: 1 }}>{lambda}</p>
-                      <p style={{ margin: 0, fontSize: "11px", color: "#aaa" }}>Poisson property</p>
+                      <p style={{ margin: "0 0 2px", fontSize: "11px", fontWeight: "700", color: ACCENT, textTransform: "uppercase", letterSpacing: "0.05em" }}>E[X] = Var[X] = λ·t</p>
+                      <p style={{ margin: 0, fontSize: "22px", fontWeight: "800", color: ACCENT, lineHeight: 1 }}>
+                        {((selectedDevice !== "all" && backendLambda ? backendLambda.lambdaPerHour : lambda) * WINDOW_HOURS).toFixed(2)}
+                      </p>
+                      <p style={{ margin: 0, fontSize: "11px", color: "#aaa" }}>
+                        expected events over {WINDOW_HOURS}h · λ={(selectedDevice !== "all" && backendLambda ? backendLambda.lambdaPerHour : lambda)} /hr
+                      </p>
                     </div>
                     <div style={{ padding: "12px", background: "#fafae8", borderRadius: "10px", border: "1px solid #e0de80" }}>
                       <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: "700", color: GOLD, textTransform: "uppercase", letterSpacing: "0.05em" }}>Trigger Sources</p>
@@ -3224,11 +3228,11 @@ export default function ModelingSimulation() {
                   <h5 style={{ margin: "0 0 16px", fontWeight: "700", fontSize: "15px", color: "#1a1a1a" }}>Simulation Inputs (your home)</h5>
                   <div style={{ padding: "12px 14px", background: "#f0faf4", borderRadius: "10px", border: "1px solid #c2e0cf", marginBottom: "16px" }}>
                     {[
-                      ["Total Events",  filteredEventsByDevice.length],
+                      ["Total Events", filteredEventsByDevice.length],
                       ["Total Devices", devices.length],
-                      ["Time Span",     `${spanHours.toFixed(1)}h`],
-                      ["Avg Power",     `${avgPower.toFixed(0)}W`],
-                      ["λ (events/h)",  lambda],
+                      ["Time Span", `${spanHours.toFixed(1)}h`],
+                      ["Avg Power", `${avgPower.toFixed(0)}W`],
+                      ["λ (events/h)", lambda],
                     ].map(([label, value]) => (
                       <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "4px" }}>
                         <span style={{ color: "#555" }}>{label}</span>
@@ -3266,8 +3270,8 @@ export default function ModelingSimulation() {
                       {[
                         { label: "Avg Response Time", value: `${simResults[0].avgResponseTime} ms`, color: ACCENT },
                         { label: "Device Utilization", value: `${(simResults[0].utilization * 100).toFixed(1)}%`, color: GREEN },
-                        { label: "Energy Consumed",    value: `${simResults[0].energyKwh} kWh`,     color: GOLD },
-                        { label: "System Stability",   value: `${simResults[0].stability}%`,          color: parseFloat(simResults[0].stability) > 70 ? GREEN : "#c03030" },
+                        { label: "Energy Consumed", value: `${simResults[0].energyKwh} kWh`, color: GOLD },
+                        { label: "System Stability", value: `${simResults[0].stability}%`, color: parseFloat(simResults[0].stability) > 70 ? GREEN : "#c03030" },
                       ].map((stat, i) => (
                         <div key={i} className="col-6">
                           <div style={{ ...card, padding: "16px 18px" }}>
@@ -3291,8 +3295,8 @@ export default function ModelingSimulation() {
                             <Tooltip contentStyle={{ borderRadius: "10px", border: "1px solid #e0dcea", fontSize: "13px" }} />
                             <Legend iconType="square" wrapperStyle={{ fontSize: "12px" }} />
                             <Bar dataKey="responseTime" name="Response (ms)" fill={ACCENT} radius={[4, 4, 0, 0]} maxBarSize={32} />
-                            <Bar dataKey="stability"    name="Stability (%)" fill={GREEN}  radius={[4, 4, 0, 0]} maxBarSize={32} />
-                            <Bar dataKey="utilization"  name="Utilization (%)" fill={GOLD} radius={[4, 4, 0, 0]} maxBarSize={32} />
+                            <Bar dataKey="stability" name="Stability (%)" fill={GREEN} radius={[4, 4, 0, 0]} maxBarSize={32} />
+                            <Bar dataKey="utilization" name="Utilization (%)" fill={GOLD} radius={[4, 4, 0, 0]} maxBarSize={32} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
