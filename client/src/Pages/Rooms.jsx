@@ -72,14 +72,14 @@ const Rooms = () => {
   const [loading,  setLoading]  = useState(true);
   const [online,   setOnline]   = useState(false);
 
-  // Add room modal
+  // Add room 
   const [showModal,  setShowModal]  = useState(false);
   const [formName,   setFormName]   = useState("");
   const [formDesc,   setFormDesc]   = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError,  setFormError]  = useState("");
 
-  // Delete room modal
+  // Delete 
   const [roomToDelete,  setRoomToDelete]  = useState(null); // { id, name }
   const [deleting,      setDeleting]      = useState(false);
   const [deleteError,   setDeleteError]   = useState("");
@@ -154,7 +154,7 @@ const Rooms = () => {
     const t = token || localStorage.getItem("token");
     try {
       await apiFetch(`/rooms/${homeId}/rooms/${roomToDelete.id}`, t, { method: "DELETE" });
-      // Optimistically remove from list
+      
       setRooms(prev => prev.filter(r => r.id !== roomToDelete.id));
       setRoomToDelete(null);
     } catch (err) {
@@ -276,7 +276,6 @@ const Rooms = () => {
         )}
       </div>
 
-      {/* ── Add Room Modal ─────────────────────────────────────────────── */}
       {showModal && (
         <>
           <Overlay onClick={() => setShowModal(false)} />
