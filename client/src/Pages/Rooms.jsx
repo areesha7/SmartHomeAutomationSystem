@@ -1,9 +1,8 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Sofa, ChefHat, Bed, Bath, Briefcase, Car,
-  Home, RotateCcw, Wifi, WifiOff, Plus, X
+  Home, RotateCcw, Wifi, WifiOff, Plus, X, Trash2, AlertTriangle
 } from "lucide-react";
 import Layout from "../Components/Layout";
 import { useAuth } from "../context/AuthContext";
@@ -63,7 +62,7 @@ const Overlay = ({ onClick }) => (
 );
 
 const Rooms = () => {
-  const navigate      = useNavigate();
+  const navigate        = useNavigate();
   const { token, user } = useAuth();
 
   const isAdmin = user?.role === "ADMIN";
@@ -73,11 +72,17 @@ const Rooms = () => {
   const [loading,  setLoading]  = useState(true);
   const [online,   setOnline]   = useState(false);
 
-  const [showModal,   setShowModal]   = useState(false);
-  const [formName,    setFormName]    = useState("");
-  const [formDesc,    setFormDesc]    = useState("");
-  const [submitting,  setSubmitting]  = useState(false);
-  const [formError,   setFormError]   = useState("");
+  // Add room modal
+  const [showModal,  setShowModal]  = useState(false);
+  const [formName,   setFormName]   = useState("");
+  const [formDesc,   setFormDesc]   = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [formError,  setFormError]  = useState("");
+
+  // Delete room modal
+  const [roomToDelete,  setRoomToDelete]  = useState(null); // { id, name }
+  const [deleting,      setDeleting]      = useState(false);
+  const [deleteError,   setDeleteError]   = useState("");
 
 
   const fetchHomeId = useCallback(async () => {
@@ -142,6 +147,27 @@ const Rooms = () => {
     }
   };
 
+  const handleDeleteRoom = async () => {
+    if (!roomToDelete || !homeId) return;
+    setDeleteError("");
+    setDeleting(true);
+    const t = token || localStorage.getItem("token");
+    try {
+      await apiFetch(`/rooms/${homeId}/rooms/${roomToDelete.id}`, t, { method: "DELETE" });
+      // Optimistically remove from list
+      setRooms(prev => prev.filter(r => r.id !== roomToDelete.id));
+      setRoomToDelete(null);
+    } catch (err) {
+      setDeleteError(
+        err.message.includes("404") ? "Room not found. It may have already been deleted." :
+        err.message.includes("403") ? "You don't have permission to delete this room." :
+        "Failed to delete room. Try again."
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
 
   const inputStyle = { width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1.5px solid #e0dcea", fontSize: "14px", outline: "none", color: "#1a1a1a", background: "white", boxSizing: "border-box" };
   const modalBox   = { position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "white", borderRadius: "16px", boxShadow: "0 20px 60px rgba(0,0,0,0.20)", padding: "28px", width: "min(460px,90vw)", zIndex: 1001 };
@@ -151,6 +177,8 @@ const Rooms = () => {
       <style>{`
         .room-card { background: white; border-radius: 14px; padding: 20px; box-shadow: 0 6px 15px rgba(0,0,0,0.06); cursor: pointer; transition: transform 0.3s ease, box-shadow 0.3s ease; border: 1px solid #f0eef8; }
         .room-card:hover { transform: translateY(-5px); box-shadow: 0 12px 28px rgba(0,0,0,0.12); }
+        .delete-btn { opacity: 0; transition: opacity 0.2s ease; }
+        .room-card:hover .delete-btn { opacity: 1; }
         @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
       `}</style>
 
@@ -198,7 +226,29 @@ const Rooms = () => {
               const Icon = room.icon;
               return (
                 <div key={room.id} className="col-md-4 col-sm-6">
-                  <div className="room-card" onClick={() => navigate(`/rooms/${room.id}`)}>
+                  <div className="room-card" style={{ position: "relative" }} onClick={() => navigate(`/rooms/${room.id}`)}>
+
+                    {/* ── Delete button (ADMIN only, appears on hover) ── */}
+                    {isAdmin && (
+                      <button
+                        className="delete-btn"
+                        onClick={e => {
+                          e.stopPropagation(); // prevent navigating into the room
+                          setDeleteError("");
+                          setRoomToDelete({ id: room.id, name: room.name });
+                        }}
+                        title="Delete room"
+                        style={{
+                          position: "absolute", top: "12px", right: "12px",
+                          background: "#fef2f2", border: "1px solid #fdd",
+                          borderRadius: "8px", padding: "5px 7px",
+                          cursor: "pointer", display: "flex", alignItems: "center",
+                          zIndex: 1,
+                        }}>
+                        <Trash2 size={14} color="#c03030" />
+                      </button>
+                    )}
+
                     <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "14px" }}>
                       <div style={{ width: "54px", height: "54px", background: "#e7f3ee", borderRadius: "13px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                         <Icon size={26} color="#63a17f" />
@@ -226,6 +276,7 @@ const Rooms = () => {
         )}
       </div>
 
+      {/* ── Add Room Modal ─────────────────────────────────────────────── */}
       {showModal && (
         <>
           <Overlay onClick={() => setShowModal(false)} />
@@ -266,6 +317,62 @@ const Rooms = () => {
               <button onClick={handleAddRoom} disabled={submitting}
                 style={{ background: submitting ? "#aaa" : "#63a17f", color: "white", border: "none", borderRadius: "8px", padding: "10px 20px", fontSize: "14px", fontWeight: "600", cursor: submitting ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
                 {submitting ? <><RotateCcw size={13} style={{ animation: "spin 1s linear infinite" }} /> Creating...</> : "Create Room"}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Delete Confirmation Modal ──────────────────────────────────── */}
+      {roomToDelete && (
+        <>
+          <Overlay onClick={() => { if (!deleting) setRoomToDelete(null); }} />
+          <div style={modalBox}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#fef2f2", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <AlertTriangle size={18} color="#c03030" />
+                </div>
+                <h5 style={{ margin: 0, fontWeight: "700", fontSize: "17px", color: "#1a1a1a" }}>Delete Room</h5>
+              </div>
+              {!deleting && (
+                <button onClick={() => setRoomToDelete(null)} style={{ background: "none", border: "none", cursor: "pointer" }}>
+                  <X size={20} color="#888" />
+                </button>
+              )}
+            </div>
+
+            <div style={{ marginBottom: "20px" }}>
+              <p style={{ margin: "0 0 12px", fontSize: "14px", color: "#444", lineHeight: 1.6 }}>
+                Are you sure you want to delete <strong style={{ color: "#1a1a1a" }}>"{roomToDelete.name}"</strong>?
+                This action cannot be undone.
+              </p>
+              <div style={{ padding: "10px 14px", background: "#fff8e1", borderRadius: "8px", border: "1px solid #ffe082", fontSize: "12px", color: "#b45309" }}>
+                ⚠️ All devices assigned to this room may be affected.
+              </div>
+            </div>
+
+            {deleteError && (
+              <div style={{ padding: "10px 14px", background: "#fef2f2", borderRadius: "8px", border: "1px solid #fdd", fontSize: "13px", color: "#c03030", marginBottom: "16px" }}>
+                {deleteError}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setRoomToDelete(null)}
+                disabled={deleting}
+                style={{ background: "#f0f0f0", color: "#555", border: "none", borderRadius: "8px", padding: "10px 20px", fontSize: "14px", fontWeight: "600", cursor: deleting ? "not-allowed" : "pointer", opacity: deleting ? 0.6 : 1 }}>
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteRoom}
+                disabled={deleting}
+                style={{ background: deleting ? "#aaa" : "#c03030", color: "white", border: "none", borderRadius: "8px", padding: "10px 20px", fontSize: "14px", fontWeight: "600", cursor: deleting ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                {deleting
+                  ? <><RotateCcw size={13} style={{ animation: "spin 1s linear infinite" }} /> Deleting...</>
+                  : <><Trash2 size={14} /> Delete Room</>
+                }
               </button>
             </div>
           </div>

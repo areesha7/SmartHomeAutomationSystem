@@ -20,6 +20,7 @@ require('dotenv').config();
 const express    = require('express');
 const cors       = require('cors');
 const mongoose   = require('mongoose');
+const helmet = require('helmet');
 require('./events/eventLogListener');
 
 
@@ -34,10 +35,14 @@ const automationRoutes = require('./routes/automationRoutes');
 const iotRoutes        = require('./routes/iotRoutes');
 const AutomationService = require('./services/automationService');
 const eventRoutes      = require('./routes/eventRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
+const energyRoutes    = require('./routes/energyRoutes');
+const modelRoutes = require('./routes/modelRoutes');
+const highEnergyMonitor = require('./services/highEnergyMonitoringService');
+const alertRoutes = require('./routes/alertRoutes');
 
-
-
-// ── Express Setup ──────────────────────────────────────────────────────────────
+const globalErrorHandler = require('./middleware/errorHandler');
+const AppError = require('./utils/AppError');
 
 const app = express();
 
@@ -55,6 +60,10 @@ app.use('/devices',deviceRoutes);
 app.use('/automations',automationRoutes);
 app.use('/iot',iotRoutes);
 app.use('/events',eventRoutes);
+app.use('/dashboard', dashboardRoutes);
+app.use('/energy', energyRoutes);
+app.use('/model', modelRoutes);
+app.use('/alerts', alertRoutes);
 app.use('/simulation', simulationRoutes);
 
 
@@ -77,6 +86,7 @@ const connectDB = async () => {
     const conn = await mongoose.connect(process.env.MONGO_URI);
     console.log(`[DB] MongoDB connected: ${conn.connection.host}`);
     await AutomationService.scheduleAllActiveRules();
+    highEnergyMonitor.start();
   } catch (err) {
     console.error('[DB] Connection failed:', err.message);
     process.exit(1);
