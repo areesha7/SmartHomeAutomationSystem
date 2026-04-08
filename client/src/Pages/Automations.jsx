@@ -1085,7 +1085,7 @@ const Automations = () => {
           setTimeout(async () => {
             const devicesList = await fetchDevices();
             await fetchAutomations(devicesList, true);
-          }, 1000);
+          }, 30000);
           
         } catch (error) {
           console.error(`[Auto-Checker] ❌ Failed to execute ${auto.name}:`, error);
@@ -1101,7 +1101,7 @@ const Automations = () => {
     
     const interval = setInterval(() => {
       checkAndExecuteDueAutomations();
-    }, 15000);
+    }, 35000);
     
     return () => clearInterval(interval);
   }, [token, automations, checkAndExecuteDueAutomations]);
