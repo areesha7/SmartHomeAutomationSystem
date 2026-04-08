@@ -3113,7 +3113,7 @@ export default function ModelingSimulation() {
                   <h5 style={{ margin: "0 0 4px", fontWeight: "700", fontSize: "15px", color: "#1a1a1a" }}>Computed Transition Matrix</h5>
                   <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#aaa" }}>
                     {markovSource === "backend" && backendMarkov
-                      ? ` · ${backendMarkov.deviceName} · ${backendMarkov.totalTransitions} transitions recorded in MongoDB`
+                      ? ` · ${backendMarkov.deviceName} · ${backendMarkov.totalTransitions} transitions recorded`
                       : "P(row state to column state) derived from real event log "}
                   </p>
                   <div style={{ overflowX: "auto" }}>
