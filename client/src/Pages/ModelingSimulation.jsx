@@ -3003,17 +3003,17 @@ export default function ModelingSimulation() {
                   </select>
 
                   <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                    <div style={{ padding: "12px", background: "#f0faf4", borderRadius: "10px", border: "1px solid #c2e0cf" }}>
+                    {/* <div style={{ padding: "12px", background: "#f0faf4", borderRadius: "10px", border: "1px solid #c2e0cf" }}>
                       <p style={{ margin: "0 0 2px", fontSize: "11px", fontWeight: "700", color: GREEN, textTransform: "uppercase", letterSpacing: "0.05em" }}>Computed λ </p>
                       <p style={{ margin: 0, fontSize: "28px", fontWeight: "800", color: GREEN, lineHeight: 1 }}>{lambda}</p>
                       <p style={{ margin: 0, fontSize: "11px", color: "#aaa" }}>events / hour</p>
-                    </div>
+                    </div> */}
 
-                    {/* Backend Lambda - only show when device is selected */}
+                    
                     {selectedDevice !== "all" && backendLambda && (
                       <div style={{ padding: "12px", background: "linear-gradient(135deg, #667eea08, #764ba208)", borderRadius: "10px", border: "1px solid #667eea40" }}>
                         <p style={{ margin: "0 0 2px", fontSize: "11px", fontWeight: "700", color: "#667eea", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                          Backend λ 
+                          Calculated λ 
                         </p>
                         <p style={{ margin: 0, fontSize: "28px", fontWeight: "800", color: "#667eea", lineHeight: 1 }}>
                           {backendLambda.lambdaPerHour}
