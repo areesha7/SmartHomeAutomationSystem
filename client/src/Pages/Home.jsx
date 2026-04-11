@@ -1,19 +1,28 @@
+/* FLOW:
+   User clicks → Command executes → API calls happen
+   → Observer notifies → Subscribed parts react/update
+*/
 
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
   Zap, Lightbulb, Thermometer, Lock, Power, ChevronRight,
-  Wifi, Cpu, WifiOff, RotateCcw, AlertTriangle, Home, Activity
+  Wifi, Cpu, WifiOff, RotateCcw, AlertTriangle, Home, Activity,
+  Bell, Battery, TrendingUp, Shield, Users, RefreshCw, Settings, UserCog,
+  Clock, Play, PowerOff
 } from "lucide-react";
 import { motion } from "framer-motion";
 import Layout from "../Components/Layout";
 import { useAuth } from "../context/AuthContext";
 
-const BASE_URL = "http://localhost:5000";
+
+const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 
 const apiFetch = async (path, token, options = {}) => {
   const storedToken = token || localStorage.getItem("token") || null;
   if (!storedToken) throw new Error("No auth token");
+
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
     headers: {
@@ -22,22 +31,20 @@ const apiFetch = async (path, token, options = {}) => {
       ...(options.headers || {}),
     },
   });
+
   if (!res.ok) throw new Error(`API ${res.status}`);
-  if (res.status === 204) return null;
-  return res.json();
+  if (res.status === 204) return { data: null, headers: res.headers };
+
+  const data = await res.json();
+  return { data, headers: res.headers };
 };
 
-class RoomCardFactory {
-  static fromBackend(room) {
-    return {
-      id:          room.id || room._id,
-      name:        room.name,
-      description: room.description || null,
-      deviceCount: room.deviceCount ?? 0,
-    };
-  }
-}
-
+/* 
+   OBSERVER PATTERN — dashboardBus acts as a central event system.
+   - Components subscribe to events like "lights"
+   - When lights are updated (after API call), notify() is triggered
+   - All subscribed functions automatically run (e.g., logging or UI updates)
+ */
 class DashboardObserver {
   constructor() { this._listeners = {}; }
   subscribe(event, fn)   { if (!this._listeners[event]) this._listeners[event] = []; this._listeners[event].push(fn); }
@@ -46,125 +53,63 @@ class DashboardObserver {
 }
 const dashboardBus = new DashboardObserver();
 
+/* 
+   COMMAND PATTERN — BulkLightCommand wraps the action of controlling multiple lights.
+   - Instead of directly calling API, we create a command object
+   - execute() performs the action for all devices
+   - After execution, it notifies observers and refreshes dashboard
+ */
 class Command { execute() {} undo() {} }
 
-class LightsOnCommand extends Command {
-  constructor(setter, prev) { super(); this._s = setter; this._p = prev; }
-  execute() { this._s(x => ({ ...x, lightsOn: x.totalDevices })); dashboardBus.notify("lights", { state: "on" }); }
-  undo()    { this._s(x => ({ ...x, lightsOn: this._p })); }
-}
-class LightsOffCommand extends Command {
-  constructor(setter, prev) { super(); this._s = setter; this._p = prev; }
-  execute() { this._s(x => ({ ...x, lightsOn: 0 })); dashboardBus.notify("lights", { state: "off" }); }
-  undo()    { this._s(x => ({ ...x, lightsOn: this._p })); }
-}
-
-const deriveStatsFromDevices = (devices) => ({
-  totalDevices:  devices.length,
-  activeDevices: devices.filter(d => d.status === "ON").length,
-  lightsOn:      devices.filter(d => d.type === "LIGHT" && d.status === "ON").length,
-  livePowerW:    devices.filter(d => d.status === "ON").reduce((s, d) => s + (d.powerRatingWatt || 0), 0),
-  faultCount:    devices.filter(d => d.status === "FAULT").length,
-  totalDoors:    0,
-  doorsLocked:   0,
-});
-
-const deriveRecentDevices = (devices) => {
-  const iconMap = { LIGHT: Lightbulb, FAN: Zap, AC: Thermometer };
-  return [...devices]
-    .sort((a, b) => new Date(b.lastUpdated || 0) - new Date(a.lastUpdated || 0))
-    .slice(0, 6)
-    .map(d => ({
-      id:         d._id,
-      _backendId: d._id,
-      name:       d.name,
-      room:       typeof d.room === "object" ? d.room?.name : "—",
-      icon:       iconMap[d.type] || Zap,
-      isOn:       d.status === "ON",
-      status:     d.status,
-      type:       d.type,
-    }));
-};
-
-const deriveAlertsFromEvents = (events) => {
-  const now   = Date.now();
-  const dayMs = 24 * 60 * 60 * 1000;
-  return events
-    .filter(ev => ev.action === "FAULT" && (now - new Date(ev.timestamp).getTime()) < dayMs)
-    .slice(0, 2)
-    .map(ev => {
-      const minsAgo   = Math.floor((now - new Date(ev.timestamp).getTime()) / 60000);
-      const timeLabel = minsAgo < 1 ? "just now" : minsAgo < 60 ? `${minsAgo} min ago` : `${Math.floor(minsAgo / 60)}h ago`;
-      return {
-        id:     ev._id || Math.random(),
-        icon:   AlertTriangle,
-        label:  "Device Fault",
-        detail: `${ev.deviceName} — ${timeLabel}`,
-        color:  "#c03030",
-      };
-    });
-};
-
-const deriveActivityFromEvents = (events) => {
-  const now   = Date.now();
-  const dayMs = 24 * 60 * 60 * 1000;
-  return events
-    .filter(ev => ev.action === "ON" && (now - new Date(ev.timestamp).getTime()) < dayMs)
-    .slice(0, 2)
-    .map(ev => {
-      const minsAgo   = Math.floor((now - new Date(ev.timestamp).getTime()) / 60000);
-      const timeLabel = minsAgo < 1 ? "just now" : minsAgo < 60 ? `${minsAgo} min ago` : `${Math.floor(minsAgo / 60)}h ago`;
-      return {
-        id:     ev._id || Math.random(),
-        icon:   Activity,
-        label:  "Device Activated",
-        detail: `${ev.deviceName} — ${timeLabel}`,
-        color:  "#2e8b57",
-      };
-    });
-};
-
-
-const buildRoomIdSet = (rooms) => {
-  const ids = new Set();
-  rooms.forEach(r => {
-    if (r._id) ids.add(r._id.toString());
-    if (r.id)  ids.add(r.id.toString());
-  });
-  return ids;
-};
-
-const deviceBelongsToUser = (device, roomIdSet) => {
-  if (!device.room) return false;
-  let roomId;
-  if (typeof device.room === "object") {
-    roomId = (device.room._id || device.room.id);
-  } else {
-    roomId = device.room;
+class BulkLightCommand extends Command {
+  constructor(devices, action, token, onDone) {
+    super();
+    this._devices = devices;
+    this._action  = action;
+    this._token   = token;
+    this._onDone  = onDone;
   }
-  if (!roomId) return false;
-  return roomIdSet.has(roomId.toString());
-};
-
-const eventBelongsToUser = (event, deviceIdSet) => {
-  if (!event.device) return false;
-  let deviceId;
-  if (typeof event.device === "object") {
-    deviceId = (event.device._id || event.device.id);
-  } else {
-    deviceId = event.device;
+  async execute() {
+    const lights = this._devices.filter(d => d.type === "LIGHT" && d.status !== "FAULT");
+    await Promise.allSettled(
+      lights.map(d =>
+        apiFetch(`/devices/${d._id}/control`, this._token, {
+          method: "POST",
+          body: JSON.stringify({ action: this._action }),
+        })
+      )
+    );
+    dashboardBus.notify("lights", { state: this._action.toLowerCase() });
+    if (this._onDone) this._onDone();
   }
-  if (!deviceId) return false;
-  return deviceIdSet.has(deviceId.toString());
+}
+
+
+const timeAgo = (ts) => {
+  const mins = Math.floor((Date.now() - new Date(ts).getTime()) / 60000);
+  if (mins < 1)  return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs  < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 };
 
+const ACTION_COLORS = {
+  ON:   "#2e8b57",
+  OFF:  "#888",
+  IDLE: "#b8860b",
+  FAULT:"#c03030",
+};
+
+const ACTION_ICONS = {
+  ON: Play,
+  OFF: PowerOff,
+  FAULT: AlertTriangle,
+};
 
 function useClock() {
   const [t, setT] = useState(new Date());
-  useEffect(() => {
-    const id = setInterval(() => setT(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
+  useEffect(() => { const id = setInterval(() => setT(new Date()), 1000); return () => clearInterval(id); }, []);
   return t;
 }
 
@@ -180,9 +125,7 @@ const SectionHeader = ({ title, right }) => (
 
 const LiveBadge = ({ online, loading }) => (
   <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "2px 8px", borderRadius: "12px", fontSize: "10px", fontWeight: "600", background: loading ? "#f0f0f0" : online ? "#e8f5ee" : "#fdecea", color: loading ? "#888" : online ? "#2e8b57" : "#c03030" }}>
-    {loading
-      ? <RotateCcw size={9} style={{ animation: "spin 1s linear infinite" }} />
-      : online ? <Wifi size={9} /> : <WifiOff size={9} />}
+    {loading ? <RotateCcw size={9} style={{ animation: "spin 1s linear infinite" }} /> : online ? <Wifi size={9} /> : <WifiOff size={9} />}
     {loading ? "Loading" : online ? "Live" : "Offline"}
   </span>
 );
@@ -201,224 +144,131 @@ const Dashboard = () => {
   const P      = "#2e8b57";
   const PURPLE = "#5c35b0";
   const GOLD   = "#b8860b";
-  const TEAL   = "#187070";
   const RED    = "#c03030";
 
-  const [home, setHome] = useState(null);
-  const [rooms, setRooms] = useState([]);
-  const [allDevices,     setAllDevices]     = useState([]);
-  const [liveEvents, setLiveEvents] = useState([]);
-  const [loadingHome, setLoadingHome] = useState(true);
-  const [loadingRooms,   setLoadingRooms]   = useState(true);
-  const [loadingDevices, setLoadingDevices] = useState(true);
-  const [loadingEvents,  setLoadingEvents]  = useState(true);
-  const [homeOnline, setHomeOnline] = useState(false);
-  const [roomsOnline,  setRoomsOnline]= useState(false);
-  const [devicesOnline,  setDevicesOnline]  = useState(false);
-  const [eventsOnline, setEventsOnline] = useState(false);
-  const [bulkLoading, setBulkLoading] = useState(false);
+  const [summary,       setSummary]       = useState(null);
+  const [allDevices,    setAllDevices]    = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [online,        setOnline]        = useState(false);
+  const [bulkLoading,   setBulkLoading]   = useState(false);
+  const [activeAction,  setActive]        = useState(null);
+  const [cmdHistory,    setCmdHist]       = useState([]);
+
+  const [scopedAlerts,  setScopedAlerts]  = useState(null);
+  const [userHomeId,    setUserHomeId]    = useState(null);
 
 
-  const [userRoomIds, setUserRoomIds]   = useState(new Set());
-  const [userDeviceIds, setUserDeviceIds] = useState(new Set());
-
-  const [stats, setStats] = useState({ totalDevices: 0, activeDevices: 0, lightsOn: 0, livePowerW: 0, faultCount: 0, totalDoors: 0, doorsLocked: 0 });
-  const [recentDevices, setRecentDevices] = useState([]);
-  const [activeAction,  setActive] = useState(null);
-  const [cmdHistory, setCmdHist] = useState([]);
-
-  const loadAll = useCallback(async (t) => {
-
-    setLoadingHome(true);
-    let homeId = null;
-    try {
-      const data = await apiFetch("/homes/mine", t);
-      const h    = data?.data?.home || data?.home;
-      setHome(h);
-      setHomeOnline(true);
-      homeId = h?.id || h?._id;
-    } catch {
-      setHomeOnline(false);
-    } finally {
-      setLoadingHome(false);
+  const resolveHomeId = useCallback(async (summaryData) => {
+    const homeIdFromSummary = summaryData?.home?._id || summaryData?.home?.id;
+    if (homeIdFromSummary) {
+      setUserHomeId(homeIdFromSummary);
+      return homeIdFromSummary;
     }
 
-
-    setLoadingRooms(true);
-    let roomIdSet = new Set();
     try {
-      if (homeId) {
-        const data = await apiFetch(`/rooms/${homeId}/rooms`, t);
-        const list = data?.data?.rooms || data?.rooms || [];
-        setRooms(list.map(r => RoomCardFactory.fromBackend(r)));
-        setRoomsOnline(true);
-        roomIdSet = buildRoomIdSet(list); 
-        setUserRoomIds(roomIdSet);
+      const userId = user?._id || user?.id || localStorage.getItem("userId");
+      if (!userId) return null;
+
+      const { data } = await apiFetch(`/users/${userId}`, token);
+      const resolvedHomeId = data?.data?.homeId || data?.homeId || data?.data?.home?._id;
+      if (resolvedHomeId) {
+        setUserHomeId(resolvedHomeId);
+        return resolvedHomeId;
       }
-    } catch {
-      setRoomsOnline(false);
-    } finally {
-      setLoadingRooms(false);
+    } catch (err) {
+      console.error("[Dashboard] resolveHomeId failed:", err);
     }
+    return null;
+  }, [token, user]);
 
-    setLoadingDevices(true);
-    let deviceIdSet = new Set();
+  const fetchScopedAlerts = useCallback(async (homeId) => {
+    if (!homeId) return;
+
     try {
-      const data = await apiFetch("/devices", t);
-      const list = data?.data?.devices || data?.devices || [];
+      const isAdmin = user?.role === "ADMIN" || user?.user?.role === "ADMIN";
 
-      const filtered = list.filter(d => deviceBelongsToUser(d, roomIdSet));
-      setAllDevices(filtered);
-      setDevicesOnline(true);
-      setStats(prev => ({ ...prev, ...deriveStatsFromDevices(filtered) }));
-      setRecentDevices(deriveRecentDevices(filtered));
-      deviceIdSet = new Set(filtered.map(d => d._id?.toString()));
-      setUserDeviceIds(deviceIdSet);
-    } catch {
-      setDevicesOnline(false);
-    } finally {
-      setLoadingDevices(false);
+      if (isAdmin) {
+        const { data } = await apiFetch(`/alerts/home/${homeId}`, token);
+        const alerts   = data?.data || data;
+
+        setScopedAlerts({
+          unread:   alerts?.unread   ?? alerts?.filter?.(a => !a.isRead)?.length ?? 0,
+          critical: alerts?.critical ?? alerts?.filter?.(a => a.severity === "CRITICAL")?.length ?? 0,
+          total:    alerts?.total    ?? alerts?.length ?? 0,
+        });
+      } else {
+        const { data } = await apiFetch(`/alerts/stats`, token);
+        const stats    = data?.data || data;
+
+        setScopedAlerts({
+          unread:   stats?.unread   ?? 0,
+          critical: stats?.critical ?? 0,
+          total:    stats?.total    ?? 0,
+        });
+      }
+    } catch (err) {
+      console.error("[Dashboard] fetchScopedAlerts failed:", err);
     }
+  }, [token, user]);
 
-    setLoadingEvents(true);
+  const fetchDashboard = useCallback(async () => {
+    setLoading(true);
     try {
-      const data = await apiFetch("/events/recent?limit=50", t);
-      const list = data?.data?.events || data?.events || [];
+      const { data } = await apiFetch("/dashboard", token);
+      const s = data?.data || data;
+      console.log("[DEBUG] Full dashboard response:", s);
+    console.log("[DEBUG] Energy object:", s?.energy);
+    console.log("[DEBUG] TodayKwh value:", s?.energy?.todayKwh);
+      setSummary(s);
+      setOnline(true);
 
-      const filtered = list.filter(ev => eventBelongsToUser(ev, deviceIdSet));
-      setLiveEvents(filtered);
-      setEventsOnline(true);
+      const { data: devData } = await apiFetch("/devices", token);
+      const devList = devData?.data?.devices || devData?.devices || [];
+      setAllDevices(devList);
+
+      const homeId = await resolveHomeId(s);
+      await fetchScopedAlerts(homeId);
+
     } catch {
-      setEventsOnline(false);
+      setOnline(false);
     } finally {
-      setLoadingEvents(false);
+      setLoading(false);
     }
-
-    return { roomIdSet, deviceIdSet };
-  }, [token]);
+  }, [token, resolveHomeId, fetchScopedAlerts]);
 
   useEffect(() => {
-    const t = token || localStorage.getItem("token");
-    if (!t) return;
-
-    setHome(null);
-    setRooms([]);
-    setAllDevices([]);
-    setLiveEvents([]);
-    setRecentDevices([]);
-    setUserRoomIds(new Set());
-    setUserDeviceIds(new Set());
-    setStats({ totalDevices: 0, activeDevices: 0, lightsOn: 0, livePowerW: 0, faultCount: 0, totalDoors: 0, doorsLocked: 0 });
-
-    loadAll(t);
-
-    const id = setInterval(() => {
-      const currentToken = token || localStorage.getItem("token");
-      if (currentToken) loadAll(currentToken);
-    }, 30000);
-
+    if (!token && !localStorage.getItem("token")) return;
+    fetchDashboard();
+    const id = setInterval(fetchDashboard, 30000);
     return () => clearInterval(id);
-  }, [token]); 
+  }, [token]);
 
   useEffect(() => {
     const onL = d => console.log("[Observer] Lights →", d.state);
     dashboardBus.subscribe("lights", onL);
-    return () => { dashboardBus.unsubscribe("lights", onL); };
+    return () => dashboardBus.unsubscribe("lights", onL);
   }, []);
 
-  const toggleDevice = async (id) => {
-    const device = recentDevices.find(d => d.id === id);
-    if (!device) return;
-    const newAction = device.isOn ? "OFF" : "ON";
-    setRecentDevices(prev => prev.map(d => d.id === id ? { ...d, isOn: !d.isOn, status: newAction } : d));
-    setStats(prev => ({
-      ...prev,
-      activeDevices: newAction === "ON" ? prev.activeDevices + 1 : Math.max(0, prev.activeDevices - 1),
-      lightsOn: device.type === "LIGHT"
-        ? newAction === "ON" ? prev.lightsOn + 1 : Math.max(0, prev.lightsOn - 1)
-        : prev.lightsOn,
-    }));
-    try {
-      await apiFetch(`/devices/${device._backendId}/control`, token, {
-        method: "POST",
-        body:   JSON.stringify({ action: newAction }),
-      });
-    } catch {
-      setRecentDevices(prev => prev.map(d => d.id === id ? { ...d, isOn: device.isOn, status: device.status } : d));
-    }
-  };
-
-  const bulkControlLights = async (action) => {
-    const lightDevices = allDevices.filter(d => d.type === "LIGHT" && d.status !== "FAULT");
-    if (lightDevices.length === 0) return;
-
+  const handleBulkLights = async (action) => {
     setBulkLoading(true);
-
-    const cmd = action === "ON"
-      ? new LightsOnCommand(setStats, stats.lightsOn)
-      : new LightsOffCommand(setStats, stats.lightsOn);
-    cmd.execute();
-    setCmdHist(h => [...h, cmd]);
     setActive(action === "ON" ? "lon" : "lof");
-
-    setRecentDevices(prev => prev.map(d =>
-      d.type === "LIGHT" && d.status !== "FAULT"
-        ? { ...d, isOn: action === "ON", status: action }
-        : d
-    ));
-
-    const results = await Promise.allSettled(
-      lightDevices.map(d =>
-        apiFetch(`/devices/${d._id}/control`, token, {
-          method: "POST",
-          body:   JSON.stringify({ action }),
-        })
-      )
-    );
-
-    const failed = results.filter(r => r.status === "rejected").length;
-    if (failed > 0) {
-      const t = token || localStorage.getItem("token");
-      if (t) loadAll(t);
-    }
-
+    const cmd = new BulkLightCommand(allDevices, action, token, fetchDashboard);
+    await cmd.execute();
+    setCmdHist(h => [...h, cmd]);
     setBulkLoading(false);
     setTimeout(() => setActive(null), 700);
   };
 
-  const faultAlerts = eventsOnline ? deriveAlertsFromEvents(liveEvents)   : [];
-  const activityAlerts = eventsOnline ? deriveActivityFromEvents(liveEvents) : [];
-  const allAlerts = [...faultAlerts, ...activityAlerts].slice(0, 3);
-
-  const quickActions = [
-    {
-      key: "lon",
-      label: "All Lights On",
-      icon: Lightbulb,
-      accent: GOLD,
-      onClick: () => bulkControlLights("ON"),
-    },
-    {
-      key: "lof",
-      label:  "All Lights Off",
-      icon: Power,
-      accent: PURPLE,
-      onClick: () => bulkControlLights("OFF"),
-    },
-  ];
-
-  const statCards = [
-    { title: "Active Devices",  value: stats.activeDevices, suffix: "",   sub: `of ${stats.totalDevices} total`, icon: Zap,           accent: PURPLE },
-    { title: "Lights On", value: stats.lightsOn, suffix: "",   sub: "currently on", icon: Lightbulb, accent: GOLD   },
-    { title: "Live Power Draw", value: stats.livePowerW, suffix: "W",  sub: "from ON devices", icon: Activity, accent: P      },
-    { title:"Fault Devices", value: stats.faultCount, suffix: "",   sub: "need attention", icon: AlertTriangle, accent: RED    },
-  ];
-
-  const fmt = d => d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const fmt      = d => d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   const fmtDate  = d => d.toLocaleDateString("en-US",  { weekday: "long", month: "long", day: "numeric" });
-  const hour = now.getHours();
+  const hour     = now.getHours();
   const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
   const userName = user?.name || user?.email?.split("@")[0] || "";
+
+  const isAdmin = user?.role === "ADMIN" ||
+                  user?.user?.role === "ADMIN" ||
+                  summary?.home?.admin === user?._id ||
+                  summary?.home?.admin === user?.id;
 
   const card = { background: "white", borderRadius: "14px", boxShadow: "0 6px 15px rgba(0,0,0,0.06)" };
   const fade = (i, base = 0.1) => ({
@@ -426,7 +276,19 @@ const Dashboard = () => {
     transition: { delay: base + i * 0.07, duration: 0.4, ease: [0.25, 0.1, 0.25, 1] },
   });
 
-  const dashboardRooms = rooms.slice(0, 6);
+  const home        = summary?.home;
+  const devices     = summary?.devices;
+  const energy      = summary?.energy;
+  const automations = summary?.automations;
+  const events      = summary?.recentEvents || [];
+  const alerts = scopedAlerts ?? summary?.alerts;
+
+  const statCards = [
+    { title: "Active Devices",   value: devices?.byStatus?.on ?? 0,    suffix: "",    sub: `of ${devices?.total ?? 0} total`,       icon: Zap,          accent: PURPLE },
+    { title: "Lights On",        value: devices?.byType?.light ?? 0,   suffix: "",    sub: "LIGHT devices in home",                  icon: Lightbulb,    accent: GOLD   },
+    { title: "Live Wattage",     value: energy?.liveWattage ?? 0,      suffix: "W",   sub: `${energy?.liveSessions ?? 0} sessions`,  icon: Activity,     accent: P      },
+    { title: "Unread Alerts",    value: alerts?.unread ?? 0,           suffix: "",    sub: `${alerts?.critical ?? 0} critical`,      icon: AlertTriangle,accent: RED    },
+  ];
 
   return (
     <Layout>
@@ -440,11 +302,12 @@ const Dashboard = () => {
         .hq-action:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(0,0,0,0.10) !important; }
         .hq-action:hover .hq-icon { transform: scale(1.1); }
         .hq-icon { transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1); }
-        .hq-toggle-track { transition: background 0.3s ease, box-shadow 0.3s ease; }
-        .hq-toggle-thumb { transition: left 0.28s cubic-bezier(0.34,1.56,0.64,1); }
         .hq-viewall { transition: background 0.2s ease; }
         .hq-viewall:hover { background: rgba(46,139,87,0.10) !important; }
-        @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
+        .activity-card { transition: all 0.3s ease; cursor: pointer; }
+        .activity-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.1) !important; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
       `}</style>
 
       <div className="hq" style={{ minHeight: "100vh", background: "transparent", padding: "28px 32px" }}>
@@ -478,22 +341,85 @@ const Dashboard = () => {
                   <div style={{ fontSize: "34px", fontFamily: "'Syne',sans-serif", fontWeight: "700", letterSpacing: "-1px", lineHeight: 1, color: "#18103a" }}>
                     {fmt(now)}
                   </div>
+                  {home && (
+                    <div style={{ marginTop: "6px", fontSize: "11px", color: "#9a90b8" }}>
+                      {home.rooms} rooms · {home.residents} residents
+                    </div>
+                  )}
                 </div>
-                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", justifyContent: "flex-end" }}>
-                  <LiveBadge online={homeOnline} loading={loadingHome}    />
-                  <LiveBadge online={devicesOnline} loading={loadingDevices} />
-                  <LiveBadge online={eventsOnline}  loading={loadingEvents}  />
+                <div style={{ display: "flex", gap: "6px" }}>
+                  <LiveBadge online={online} loading={loading} />
+                  <button onClick={fetchDashboard}
+                    style={{ display: "flex", alignItems: "center", gap: "4px", padding: "2px 8px", borderRadius: "12px", fontSize: "10px", fontWeight: "600", background: "#f0f0f0", border: "none", cursor: "pointer", color: "#555" }}>
+                    <RefreshCw size={9} /> Refresh
+                  </button>
                 </div>
               </div>
             </div>
           </motion.div>
 
+          {/* ADMIN SECTION */}
+          {isAdmin && !loading && (
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.05, duration: 0.4 }}
+              style={{ marginBottom: "32px" }}>
+              <SectionHeader
+                title="Admin Panel"
+                right={<span style={{ fontSize: "10px", color: PURPLE, background: `${PURPLE}10`, padding: "2px 8px", borderRadius: "12px" }}>🔐 Admin Access</span>}
+              />
+              <div
+                className="hq-card"
+                onClick={() => navigate("/home-admin")}
+                style={{
+                  ...card,
+                  cursor: "pointer",
+                  padding: "20px",
+                  background: `linear-gradient(135deg, ${PURPLE}08, ${P}08)`,
+                  border: `1px solid ${PURPLE}20`,
+                  transition: "all 0.3s ease"
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-3px)";
+                  e.currentTarget.style.boxShadow = "0 12px 28px rgba(0,0,0,0.12)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 6px 15px rgba(0,0,0,0.06)";
+                }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                  <div style={{
+                    width: "52px",
+                    height: "52px",
+                    borderRadius: "14px",
+                    background: `linear-gradient(135deg, ${PURPLE}, ${P})`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: `0 4px 12px ${PURPLE}40`
+                  }}>
+                    <UserCog size={26} color="white" strokeWidth={1.8} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "#18103a" }}>Home Management Dashboard</h3>
+                    <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#7a72a0" }}>
+                      Manage residents, invitations, and home settings
+                    </p>
+                  </div>
+                  <ChevronRight size={20} color={PURPLE} />
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* STAT */}
           <motion.div {...fade(0, 0.08)} style={{ marginBottom: "32px" }}>
             <SectionHeader
               title="Overview"
-              right={<LiveBadge online={devicesOnline} loading={loadingDevices} />}
+              right={<LiveBadge online={online} loading={loading} />}
             />
-            {loadingDevices ? <LoadingBox height={110} /> : (
+            {loading ? <LoadingBox height={110} /> : (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "14px" }}>
                 {statCards.map((c, i) => {
                   const Icon = c.icon;
@@ -515,30 +441,77 @@ const Dashboard = () => {
             )}
           </motion.div>
 
+          {/* HOME INFO */}
+          {!loading && summary && (
+            <motion.div {...fade(0, 0.18)} style={{ marginBottom: "32px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "14px" }}>
+                <div style={{ ...card, padding: "20px" }}>
+                  <p style={{ margin: "0 0 12px", fontSize: "11px", fontWeight: "700", color: "#9a90b8", textTransform: "uppercase", letterSpacing: "0.08em" }}>Device Breakdown</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {[
+                      { label: "Air Conditioners", value: devices?.byType?.ac ?? 0,    color: "#5c35b0" },
+                      { label: "Fans",              value: devices?.byType?.fan ?? 0,   color: "#2e8b57" },
+                      { label: "Lights",            value: devices?.byType?.light ?? 0, color: "#b8860b" },
+                    ].map(row => (
+                      <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: "13px", color: "#555" }}>{row.label}</span>
+                        <span style={{ fontSize: "13px", fontWeight: "700", color: row.color }}>{row.value}</span>
+                      </div>
+                    ))}
+                    <div style={{ borderTop: "1px solid #f0eef8", paddingTop: "8px", display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: "13px", color: "#555" }}>FAULT devices</span>
+                      <span style={{ fontSize: "13px", fontWeight: "700", color: RED }}>{devices?.byStatus?.fault ?? 0}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ ...card, padding: "20px" }}>
+                  <p style={{ margin: "0 0 12px", fontSize: "11px", fontWeight: "700", color: "#9a90b8", textTransform: "uppercase", letterSpacing: "0.08em" }}>Energy Today</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {[
+                      { label: "Consumed today",  value: `${energy?.todayKwh ?? 0} kWh`,     color: P      },
+                      { label: "Live wattage",     value: `${energy?.liveWattage ?? 0} W`,    color: PURPLE },
+                      { label: "Active sessions",  value: energy?.liveSessions ?? 0,          color: GOLD   },
+                    ].map(row => (
+                      <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: "13px", color: "#555" }}>{row.label}</span>
+                        <span style={{ fontSize: "13px", fontWeight: "700", color: row.color }}>{row.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+            </motion.div>
+          )}
+
+          {/* QUICK ACTIONS */}
           <motion.div {...fade(0, 0.28)} style={{ marginBottom: "32px" }}>
             <SectionHeader
               title="Quick Actions"
               right={bulkLoading ? <LiveBadge online={true} loading={true} /> : null}
             />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "14px" }}>
-              {quickActions.map(btn => {
-                const Icon = btn.icon;
+              {[
+                { key: "lon", label: "All Lights On",  icon: Lightbulb, accent: GOLD,   action: "ON"  },
+                { key: "lof", label: "All Lights Off", icon: Power,      accent: PURPLE, action: "OFF" },
+              ].map(btn => {
+                const Icon   = btn.icon;
                 const active = activeAction === btn.key;
                 return (
-                  <motion.button key={btn.key} className="hq-action" whileTap={{ scale: 0.97 }}
+                  <motion.button key={btn.key} className="hq-action"
+                    whileTap={{ scale: 0.97 }}
                     animate={active ? { boxShadow: [`0 0 0 transparent`, `0 0 20px ${btn.accent}45`, `0 0 0 transparent`] } : {}}
-                    onClick={btn.onClick}
+                    onClick={() => handleBulkLights(btn.action)}
                     disabled={bulkLoading}
                     style={{ ...card, padding: "20px", border: "none", cursor: bulkLoading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: "14px", textAlign: "left", borderLeft: `3px solid ${btn.accent}`, opacity: bulkLoading ? 0.7 : 1 }}>
                     <div className="hq-icon" style={{ width: "40px", height: "40px", borderRadius: "10px", background: `${btn.accent}14`, border: `1px solid ${btn.accent}28`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      {bulkLoading && active === btn.key
-                        ? <RotateCcw size={18} color={btn.accent} style={{ animation: "spin 1s linear infinite" }} />
-                        : <Icon size={18} color={btn.accent} strokeWidth={2} />}
+                      <Icon size={18} color={btn.accent} strokeWidth={2} />
                     </div>
                     <div>
                       <span style={{ fontSize: "13px", fontWeight: "600", color: "#18103a", lineHeight: 1.3, display: "block" }}>{btn.label}</span>
                       <span style={{ fontSize: "11px", color: "#9a90b8" }}>
-                        {allDevices.filter(d => d.type === "LIGHT").length} light{allDevices.filter(d => d.type === "LIGHT").length !== 1 ? "s" : ""} 
+                        {devices?.byType?.light ?? 0} light{(devices?.byType?.light ?? 0) !== 1 ? "s" : ""} · updates backend
                       </span>
                     </div>
                   </motion.button>
@@ -547,126 +520,199 @@ const Dashboard = () => {
             </div>
           </motion.div>
 
-          <motion.div {...fade(0, 0.36)} style={{ marginBottom: "32px" }}>
+          {/* RECENT ACTIVITY */}
+          <motion.div {...fade(0, 0.38)} style={{ marginBottom: "32px" }}>
             <SectionHeader
-              title="Recently Used Devices"
-              right={<LiveBadge online={devicesOnline} loading={loadingDevices} />}
-            />
-            {loadingDevices ? <LoadingBox /> : recentDevices.length === 0 ? (
-              <div style={{ padding: "32px", textAlign: "center", color: "#bbb", fontSize: "13px", background: "white", borderRadius: "14px" }}>
-                No devices found. Add devices to your home first.
-              </div>
-            ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "14px" }}>
-                {recentDevices.map((device, i) => {
-                  const Icon = device.icon;
-                  const on   = device.isOn;
-                  return (
-                    <motion.div key={device.id} {...fade(i, 0.38)} className="hq-card"
-                      style={{ ...card, padding: "18px 20px", borderLeft: `3px solid ${on ? P : "transparent"}` }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "11px" }}>
-                          <motion.div
-                            animate={{ background: on ? `${P}1c` : "#f5f3fb", borderColor: on ? `${P}40` : "#ede9f5" }}
-                            transition={{ duration: 0.3 }}
-                            style={{ width: "36px", height: "36px", borderRadius: "9px", border: "1px solid #ede9f5", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                            <Icon size={15} color={on ? P : "#a09ab8"} strokeWidth={2} />
-                          </motion.div>
-                          <div>
-                            <p style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: "#18103a", lineHeight: 1.3 }}>{device.name}</p>
-                            <p style={{ margin: 0, fontSize: "11px", color: "#9a90b8" }}>{device.room}</p>
-                          </div>
-                        </div>
-                        <label style={{ position: "relative", display: "inline-block", width: "42px", height: "23px", cursor: "pointer", flexShrink: 0 }}>
-                          <input type="checkbox" checked={device.isOn} onChange={() => toggleDevice(device.id)} style={{ display: "none" }} />
-                          <span className="hq-toggle-track" style={{ position: "absolute", inset: 0, borderRadius: "23px", background: on ? `linear-gradient(135deg,${P},#3aad72)` : "#cec9e0", boxShadow: on ? `0 0 8px ${P}50` : undefined }} />
-                          <span className="hq-toggle-thumb" style={{ position: "absolute", width: "17px", height: "17px", background: "white", borderRadius: "50%", top: "3px", left: on ? "22px" : "3px", boxShadow: "0 1px 4px rgba(0,0,0,0.18)" }} />
-                        </label>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: on ? P : device.status === "FAULT" ? RED : "#ccc", display: "inline-block" }} />
-                        <span style={{ fontSize: "11px", color: on ? P : device.status === "FAULT" ? RED : "#aaa", fontWeight: "600" }}>
-                          {device.status}
-                        </span>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            )}
-          </motion.div>
-
-          <motion.div {...fade(0, 0.48)} style={{ marginBottom: "32px" }}>
-            <SectionHeader
-              title="System Alerts"
-              right={<LiveBadge online={eventsOnline} loading={loadingEvents} />}
-            />
-            {loadingEvents ? <LoadingBox height={100} /> : allAlerts.length === 0 ? (
-              <div style={{ padding: "24px", textAlign: "center", color: "#bbb", fontSize: "13px", background: "white", borderRadius: "14px" }}>
-                {eventsOnline ? "No alerts in the last 24 hours." : "Could not load event data."}
-              </div>
-            ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "14px" }}>
-                {allAlerts.map((alert, i) => {
-                  const Icon = alert.icon;
-                  return (
-                    <motion.div key={alert.id}
-                      initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.52 + i * 0.09, duration: 0.35 }}
-                      style={{ display: "flex", alignItems: "center", gap: "12px", padding: "14px 16px", borderRadius: "14px", background: `${alert.color}0b`, border: `1px solid ${alert.color}22` }}>
-                      <div style={{ width: "34px", height: "34px", borderRadius: "8px", background: `${alert.color}1a`, border: `1px solid ${alert.color}28`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <Icon size={14} color={alert.color} strokeWidth={2} />
-                      </div>
-                      <div>
-                        <p style={{ margin: 0, fontSize: "12.5px", fontWeight: "600", color: "#18103a", lineHeight: 1.3 }}>{alert.label}</p>
-                        <p style={{ margin: 0, fontSize: "11px", color: "#9a90b8" }}>{alert.detail}</p>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            )}
-          </motion.div>
-
-          <motion.div {...fade(0, 0.58)}>
-            <SectionHeader
-              title="Your Rooms"
+              title="Recent Activity"
               right={
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <LiveBadge online={roomsOnline} loading={loadingRooms} />
-                  <Link to="/rooms" className="hq-viewall"
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <LiveBadge online={online} loading={loading} />
+                  <Link to="/analytics" className="hq-viewall"
                     style={{ color: P, fontSize: "11px", fontWeight: "600", textDecoration: "none", display: "flex", alignItems: "center", gap: "4px", background: "rgba(46,139,87,0.08)", padding: "5px 11px", borderRadius: "7px", border: `1px solid ${P}28`, letterSpacing: "0.05em" }}>
                     View All <ChevronRight size={12} strokeWidth={2.5} />
                   </Link>
                 </div>
               }
             />
-            {loadingRooms ? <LoadingBox /> : dashboardRooms.length === 0 ? (
-              <div style={{ padding: "32px", textAlign: "center", color: "#bbb", fontSize: "13px", background: "white", borderRadius: "14px" }}>
-                {roomsOnline ? "No rooms yet. Create your first room." : "Could not load rooms."}
+            
+            {loading ? (
+              <LoadingBox height={180} />
+            ) : events.length === 0 ? (
+              <div style={{ padding: "48px", textAlign: "center", color: "#bbb", fontSize: "13px", background: "white", borderRadius: "14px" }}>
+                <Activity size={32} style={{ marginBottom: "12px", opacity: 0.5 }} />
+                <p>No recent activity. Toggle devices to generate events.</p>
               </div>
             ) : (
+              <div style={{ 
+                display: "grid", 
+                gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", 
+                gap: "16px" 
+              }}>
+                {events.slice(0, 6).map((ev, idx) => {
+                  const actionColor = ACTION_COLORS[ev.action] || "#aaa";
+                  const ActionIcon = ACTION_ICONS[ev.action] || Activity;
+                  const isOn = ev.action === "ON";
+                  
+                  return (
+                    <motion.div
+                      key={idx}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.05, duration: 0.3 }}
+                      className="activity-card"
+                      onClick={() => navigate("/analytics")}
+                      style={{
+                        background: "white",
+                        borderRadius: "16px",
+                        overflow: "hidden",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                        border: `1px solid ${actionColor}15`,
+                        transition: "all 0.3s ease",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div style={{
+                        height: "3px",
+                        background: `linear-gradient(90deg, ${actionColor}, ${actionColor}60)`,
+                      }} />
+                      
+                      <div style={{ padding: "16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
+                          <div style={{
+                            width: "40px",
+                            height: "40px",
+                            borderRadius: "12px",
+                            background: `${actionColor}10`,
+                            border: `1px solid ${actionColor}20`,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}>
+                            <ActionIcon size={18} color={actionColor} strokeWidth={2} />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <p style={{ margin: 0, fontSize: "14px", fontWeight: "600", color: "#18103a" }}>
+                              {ev.deviceName}
+                            </p>
+                            <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#9a90b8" }}>
+                              {ev.triggeredBy}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div style={{ marginBottom: "12px" }}>
+                          <span style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "4px 10px",
+                            borderRadius: "16px",
+                            fontSize: "11px",
+                            fontWeight: "600",
+                            background: `${actionColor}10`,
+                            color: actionColor,
+                          }}>
+                            <div style={{
+                              width: "5px",
+                              height: "5px",
+                              borderRadius: "50%",
+                              background: actionColor,
+                              animation: isOn ? "pulse 1.5s ease-in-out infinite" : "none",
+                            }} />
+                            Turned {ev.action}
+                          </span>
+                        </div>
+                        
+                        <div style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          borderTop: `1px solid ${actionColor}10`,
+                          paddingTop: "10px",
+                          marginTop: "2px",
+                        }}>
+                          <Clock size={11} color="#9a90b8" />
+                          <span style={{ fontSize: "10px", color: "#9a90b8", fontWeight: "500" }}>
+                            {timeAgo(ev.timestamp)}
+                          </span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
+            
+            {events.length > 6 && (
+              <div style={{ textAlign: "center", marginTop: "16px" }}>
+                <Link to="/analytics" style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  color: P,
+                  fontSize: "12px",
+                  fontWeight: "500",
+                  textDecoration: "none",
+                  padding: "8px 16px",
+                  borderRadius: "20px",
+                  background: `${P}08`,
+                  transition: "all 0.2s ease",
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = `${P}15`}
+                onMouseLeave={(e) => e.currentTarget.style.background = `${P}08`}
+                >
+                  View All {events.length} Activities
+                  <ChevronRight size={14} />
+                </Link>
+              </div>
+            )}
+          </motion.div>
+
+          {/* ROOMS */}
+          <motion.div {...fade(0, 0.48)}>
+            <SectionHeader
+              title="Your Home"
+              right={
+                <Link to="/rooms" className="hq-viewall"
+                  style={{ color: P, fontSize: "11px", fontWeight: "600", textDecoration: "none", display: "flex", alignItems: "center", gap: "4px", background: "rgba(46,139,87,0.08)", padding: "5px 11px", borderRadius: "7px", border: `1px solid ${P}28`, letterSpacing: "0.05em" }}>
+                  View Rooms <ChevronRight size={12} strokeWidth={2.5} />
+                </Link>
+              }
+            />
+            {loading ? <LoadingBox height={80} /> : (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "14px" }}>
-                {dashboardRooms.map((room, i) => (
-                  <motion.div key={room.id} {...fade(i, 0.6)} className="hq-card"
-                    onClick={() => navigate(`/rooms/${room.id}`)}
-                    style={{ ...card, cursor: "pointer", padding: "20px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
-                      <div style={{ width: "50px", height: "50px", background: "#e7f3ee", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <Home size={26} color="#63a17f" />
-                      </div>
-                      <div>
-                        <h5 style={{ margin: 0, fontWeight: "bold", fontSize: "16px", color: "#1a1a1a" }}>{room.name}</h5>
-                        <p style={{ margin: 0, fontSize: "12px", color: "#888" }}>
-                          {room.deviceCount} device{room.deviceCount !== 1 ? "s" : ""}
-                        </p>
-                      </div>
-                    </div>
-                    {room.description && (
-                      <p style={{ margin: 0, fontSize: "12px", color: "#aaa", lineHeight: 1.4 }}>{room.description}</p>
-                    )}
-                  </motion.div>
-                ))}
+                <div className="hq-card" onClick={() => navigate("/rooms")}
+                  style={{ ...card, cursor: "pointer", padding: "20px", display: "flex", alignItems: "center", gap: "14px" }}>
+                  <div style={{ width: "46px", height: "46px", background: "#e7f3ee", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Home size={22} color={P} />
+                  </div>
+                  <div>
+                    <p style={{ margin: 0, fontSize: "24px", fontWeight: "700", color: "#18103a", lineHeight: 1 }}>{home?.rooms ?? 0}</p>
+                    <p style={{ margin: 0, fontSize: "12px", color: "#9a90b8" }}>Total Rooms</p>
+                  </div>
+                </div>
+
+                <div className="hq-card" onClick={() => navigate("/rooms")}
+                  style={{ ...card, cursor: "pointer", padding: "20px", display: "flex", alignItems: "center", gap: "14px" }}>
+                  <div style={{ width: "46px", height: "46px", background: "#f3f0fc", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Users size={22} color={PURPLE} />
+                  </div>
+                  <div>
+                    <p style={{ margin: 0, fontSize: "24px", fontWeight: "700", color: "#18103a", lineHeight: 1 }}>{home?.residents ?? 0}</p>
+                    <p style={{ margin: 0, fontSize: "12px", color: "#9a90b8" }}>Residents</p>
+                  </div>
+                </div>
+
+                <div className="hq-card" onClick={() => navigate("/automations")}
+                  style={{ ...card, cursor: "pointer", padding: "20px", display: "flex", alignItems: "center", gap: "14px" }}>
+                  <div style={{ width: "46px", height: "46px", background: "#fdf8e8", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Zap size={22} color={GOLD} />
+                  </div>
+                  <div>
+                    <p style={{ margin: 0, fontSize: "24px", fontWeight: "700", color: "#18103a", lineHeight: 1 }}>{automations?.active ?? 0}</p>
+                    <p style={{ margin: 0, fontSize: "12px", color: "#9a90b8" }}>Active Automations</p>
+                  </div>
+                </div>
               </div>
             )}
           </motion.div>
@@ -678,3 +724,4 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+

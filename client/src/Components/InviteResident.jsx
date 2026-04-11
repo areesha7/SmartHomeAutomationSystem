@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function InviteResident({ homeId, onInviteSent }) {
   const { token } = useAuth();
@@ -29,18 +29,13 @@ export default function InviteResident({ homeId, onInviteSent }) {
       setError("");
       setSuccess("");
 
-      console.log("Sending invitation to:", email);
-      console.log("Home ID:", homeId);
-      
-      // Using your existing route: POST /homes/:homeId/invitations
       const response = await axios.post(
         `${API_URL}/homes/${homeId}/invitations`,
         { email },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
-      console.log("Invitation sent:", response.data);
-      setSuccess(`Invitation sent to ${email}!`);
+      setSuccess(`Invitation sent to ${email}! They will receive an email with instructions to join.`);
       setEmail("");
       
       if (onInviteSent) {
@@ -89,7 +84,7 @@ export default function InviteResident({ homeId, onInviteSent }) {
           disabled={loading}
           style={{
             padding: "10px 24px",
-            background: loading ? "#ccc" : "#63a17f",
+            background: loading ? "#ccc" : "#2e8b57",
             color: "white",
             border: "none",
             borderRadius: "8px",
@@ -109,7 +104,7 @@ export default function InviteResident({ homeId, onInviteSent }) {
       )}
       
       {success && (
-        <p style={{ color: "#63a17f", fontSize: "13px", marginTop: "12px" }}>
+        <p style={{ color: "#2e8b57", fontSize: "13px", marginTop: "12px" }}>
           ✓ {success}
         </p>
       )}

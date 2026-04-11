@@ -18,6 +18,7 @@ import VerifyResetCode from './Pages/VerifyResetCode';
 import ResetPassword from './Pages/ResetPassword';
 import AcceptInvitation from './Pages/AcceptInvitation';
 import HomeAdmin from './Pages/HomeAdmin';
+import SignupResident from './Pages/Signupresident';
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated } = useAuth();
@@ -30,6 +31,7 @@ function App() {
       {/* Public Routes */}
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
+      <Route path="/signup-resident"    element={<SignupResident />}     />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/verify-reset-code" element={<VerifyResetCode />} />
       <Route path="/reset-password" element={<ResetPassword />} />

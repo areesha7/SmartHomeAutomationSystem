@@ -28,7 +28,7 @@ export default function ForgotPassword() {
 
       setSuccess("A password reset code has been sent to your email.");
       
-      // Navigate to verify code page after 2 seconds
+
       setTimeout(() => {
         navigate("/verify-reset-code", { state: { email } });
       }, 2000);

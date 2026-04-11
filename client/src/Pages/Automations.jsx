@@ -1,7 +1,8 @@
-// import { useState, useMemo, useEffect, useCallback } from "react";
+
+// import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 // import Layout from "../Components/Layout";
 // import {
-//   Plus, Play, Settings, X, Moon, Sun, Plane, Zap, Home, Check, RotateCcw, Wifi, WifiOff
+//   Plus, Play, Settings, X, Moon, Sun, Plane, Zap, Home, Check, RotateCcw, Wifi, WifiOff, Clock
 // } from "lucide-react";
 // import { useAuth } from "../context/AuthContext";
 
@@ -45,10 +46,17 @@
 //       : "Manual trigger";
 
 //     const actionLabels = (rule.actions || []).map((a) => {
-//       if (typeof a.device === "object" && a.device?.name) {
-//         return `Turn ${a.action} ${a.device.name}`;
+//       let deviceId = null;
+//       if (typeof a.device === "string") {
+//         deviceId = a.device;
+//       } else if (a.device?._id) {
+//         deviceId = a.device._id.toString();
+//       } else if (a.device_id) {
+//         deviceId = a.device_id;
+//       } else if (a.device?.toString) {
+//         deviceId = a.device.toString();
 //       }
-//       const deviceId = typeof a.device === "string" ? a.device : a.device?._id?.toString();
+      
 //       const found = devicesList.find(d => d._id?.toString() === deviceId);
 //       if (found) return `Turn ${a.action} ${found.name}`;
 //       return `Turn ${a.action} device`;
@@ -65,8 +73,8 @@
 //       icon: iconMap[triggerType] || Zap,
 //       rawTrigger: rule.trigger,
 //       rawActions: rule.actions,
-//       lastRunAt:  rule.lastRunAt,
-//       createdBy:  rule.createdBy,
+//       lastRunAt: rule.lastRunAt,
+//       createdBy: rule.createdBy,
 //     };
 //   }
 // }
@@ -74,17 +82,17 @@
 // class ToggleCommand {
 //   constructor(id) { this.id = id; }
 //   execute(list) { return list.map(a => a.id === this.id ? { ...a, isOn: !a.isOn } : a); }
-//   undo(list)    { return this.execute(list); }
+//   undo(list) { return this.execute(list); }
 // }
 // class AddCommand {
 //   constructor(auto) { this.auto = auto; }
 //   execute(list) { return [...list, this.auto]; }
-//   undo(list)    { return list.filter(a => a.id !== this.auto.id); }
+//   undo(list) { return list.filter(a => a.id !== this.auto.id); }
 // }
 // class DeleteCommand {
 //   constructor(id) { this.id = id; this._deleted = null; this._index = null; }
 //   execute(list) {
-//     this._index   = list.findIndex(a => a.id === this.id);
+//     this._index = list.findIndex(a => a.id === this.id);
 //     this._deleted = list[this._index];
 //     return list.filter(a => a.id !== this.id);
 //   }
@@ -107,7 +115,6 @@
 //   async fetch(token, devicesList = [], currentUserId = null) {
 //     const data = await apiFetch("/automations", token);
 //     const rules = data?.data?.rules || data?.rules || [];
- 
 //     const filtered = currentUserId
 //       ? rules.filter(r => r.createdBy?.toString() === currentUserId.toString())
 //       : rules;
@@ -119,7 +126,7 @@
 //   const ids = new Set();
 //   rooms.forEach(r => {
 //     if (r._id) ids.add(r._id.toString());
-//     if (r.id)  ids.add(r.id.toString());
+//     if (r.id) ids.add(r.id.toString());
 //   });
 //   return ids;
 // };
@@ -134,9 +141,9 @@
 // };
 
 // const suggested = [
-//   { id: "s1", name: "Bedtime Routine", desc: "Wind down your home at night", trigger: "schedule", icon: Moon  },
-//   { id: "s2", name: "Wake Up", desc: "Start your day right", trigger: "schedule", icon: Sun   },
-//   { id: "s3", name: "Vacation Mode", desc: "Simulate presence while away",  trigger: "manual",   icon: Plane },
+//   { id: "s1", name: "Bedtime Routine", desc: "Wind down your home at night", trigger: "schedule", icon: Moon },
+//   { id: "s2", name: "Wake Up", desc: "Start your day right", trigger: "schedule", icon: Sun },
+//   { id: "s3", name: "Vacation Mode", desc: "Simulate presence while away", trigger: "manual", icon: Plane },
 // ];
 
 // const ACCENT = "#5c35b0";
@@ -206,24 +213,26 @@
 // const Automations = () => {
 //   const { token, user } = useAuth();
 
-//   const [automations, setAutomations]    = useState([]);
+//   const [automations, setAutomations] = useState([]);
 //   const [devices, setDevices] = useState([]);
-//   const [loadingAutos,   setLoadingAutos]   = useState(true);
+//   const [loadingAutos, setLoadingAutos] = useState(true);
 //   const [loadingDevices, setLoadingDevices] = useState(false);
 //   const [online, setOnline] = useState(false);
 
-//   const [history,      setHistory] = useState([]);
-//   const [runningId,    setRunningId]    = useState(null);
+//   const [history, setHistory] = useState([]);
+//   const [runningId, setRunningId] = useState(null);
 //   const [newModal, setNewModal] = useState(false);
 //   const [settingsAuto, setSettingsAuto] = useState(null);
-//   const [submitError,  setSubmitError]  = useState("");
-//   const [submitting,   setSubmitting]   = useState(false);
+//   const [submitError, setSubmitError] = useState("");
+//   const [submitting, setSubmitting] = useState(false);
+//   const [runResult, setRunResult] = useState(null);
+//   const lastAutoRun = useRef({});
 
 //   const emptyForm = {
-//     name:        "",
+//     name: "",
 //     triggerType: "TIME",
 //     triggerTime: "07:00",
-//     actions:     [{ device_id: "", action: "ON" }],
+//     actions: [{ device_id: "", action: "ON" }],
 //   };
 //   const [newForm, setNewForm] = useState(emptyForm);
 
@@ -231,22 +240,15 @@
 //     setLoadingDevices(true);
 //     try {
 //       const tok = t || token || localStorage.getItem("token");
-
-//       // Get this user's home
 //       const homeData = await apiFetch("/homes/mine", tok);
 //       const home = homeData?.data?.home || homeData?.home;
-//       const homeId   = home?.id || home?._id;
+//       const homeId = home?.id || home?._id;
 //       if (!homeId) { setDevices([]); return []; }
-
-//       // Get rooms for this home 
 //       const roomData = await apiFetch(`/rooms/${homeId}/rooms`, tok);
 //       const roomList = roomData?.data?.rooms || roomData?.rooms || [];
 //       const roomIdSet = buildRoomIdSet(roomList);
-
-   
-//       const devData  = await apiFetch("/devices", tok);
+//       const devData = await apiFetch("/devices", tok);
 //       const allDevices = devData?.data?.devices || devData?.devices || [];
-
 //       const filtered = allDevices.filter(d => deviceBelongsToUser(d, roomIdSet));
 //       setDevices(filtered);
 //       return filtered;
@@ -258,28 +260,158 @@
 //     }
 //   }, [token]);
 
-//   const fetchAutomations = useCallback(async (devicesList = []) => {
-//     setLoadingAutos(true);
+//   const fetchAutomations = useCallback(async (devicesList = [], silent = false) => {
+//     if (!silent) setLoadingAutos(true);
 //     try {
 //       const tok = token || localStorage.getItem("token");
 //       const currentUser = user || JSON.parse(localStorage.getItem("user") || "{}");
 //       const userId = currentUser?._id || currentUser?.id;
-//       const strategy   = new LiveAutomationStrategy();
+//       const strategy = new LiveAutomationStrategy();
 //       const data = await strategy.fetch(tok, devicesList, userId);
 //       setAutomations(data);
 //       setOnline(true);
 //     } catch {
 //       setOnline(false);
 //     } finally {
-//       setLoadingAutos(false);
+//       if (!silent) setLoadingAutos(false);
 //     }
 //   }, [token, user]);
+
+//   // Debug: Log all automations with their scheduled times
+//   useEffect(() => {
+//     if (automations.length > 0) {
+//       console.log("=== ALL AUTOMATIONS DETAILS ===");
+//       automations.forEach(auto => {
+//         console.log(`Name: ${auto.name}`);
+//         console.log(`  isOn: ${auto.isOn}`);
+//         console.log(`  trigger type: ${auto.rawTrigger?.type}`);
+//         console.log(`  scheduled time: ${auto.rawTrigger?.time}`);
+//         console.log(`  full trigger:`, auto.rawTrigger);
+//       });
+//       console.log("================================");
+//     }
+//   }, [automations]);
+
+// const checkAndExecuteDueAutomations = useCallback(async () => {
+//   if (!token || automations.length === 0) return;
+  
+//   const now = new Date();
+//   const currentHour = now.getHours();
+//   const currentMinute = now.getMinutes();
+//   const currentTimeStr = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`;
+  
+//   console.log(`[Auto-Checker] Checking automations at ${currentTimeStr}`);
+  
+//   const timeBasedAutos = automations.filter(auto => 
+//     auto.isOn && 
+//     auto.rawTrigger?.type === 'TIME' &&
+//     auto.rawTrigger?.time
+//   );
+  
+//   if (timeBasedAutos.length > 0) {
+//     console.log(`[Auto-Checker] Found ${timeBasedAutos.length} active time-based automations`);
+//   }
+  
+//   for (const auto of timeBasedAutos) {
+//     const scheduledTime = auto.rawTrigger.time;
+//     const [scheduledHour, scheduledMinute] = scheduledTime.split(':').map(Number);
+    
+//     const timeMatch = currentHour === scheduledHour && currentMinute === scheduledMinute;
+    
+//     const lastRun = lastAutoRun.current[auto._backendId];
+//     const alreadyRanRecently = lastRun && (now.getTime() - lastRun) < 120000;
+    
+//     if (timeMatch && !alreadyRanRecently) {
+//       console.log(`[Auto-Checker] 🎯 Executing automation: ${auto.name} at ${currentTimeStr} (scheduled: ${scheduledTime})`);
+      
+//       // Check if automation has actions
+//       if (!auto.rawActions || auto.rawActions.length === 0) {
+//         console.error(`[Auto-Checker] ❌ Automation "${auto.name}" has no actions configured!`);
+        
+//         // Try to fetch fresh automation data from backend
+//         try {
+//           console.log(`[Auto-Checker] Attempting to fetch fresh data for ${auto.name}...`);
+//           const freshData = await apiFetch(`/automations/${auto._backendId}`, token);
+//           console.log(`[Auto-Checker] Fresh data:`, freshData);
+          
+//           const rule = freshData?.data?.rule || freshData?.rule;
+//           if (rule && rule.actions && rule.actions.length > 0) {
+//             console.log(`[Auto-Checker] Found ${rule.actions.length} actions in fresh data!`);
+            
+//             // Execute actions from fresh data
+//             for (const action of rule.actions) {
+//               let deviceId = null;
+//               if (typeof action.device === 'string') {
+//                 deviceId = action.device;
+//               } else if (action.device?._id) {
+//                 deviceId = action.device._id;
+//               } else if (action.device_id) {
+//                 deviceId = action.device_id;
+//               }
+              
+//               if (deviceId) {
+//                 console.log(`[Auto-Checker] Executing ${action.action} on device ${deviceId}`);
+//                 try {
+//                   await apiFetch(`/devices/${deviceId}/control`, token, {
+//                     method: "POST",
+//                     body: JSON.stringify({ action: action.action })
+//                   });
+//                   console.log(`[Auto-Checker] ✅ Executed ${action.action}`);
+//                 } catch (err) {
+//                   console.error(`[Auto-Checker] ❌ Failed to execute action:`, err);
+//                 }
+//               }
+//             }
+//           } else {
+//             console.error(`[Auto-Checker] ❌ Still no actions found for "${auto.name}"`);
+//           }
+//         } catch (err) {
+//           console.error(`[Auto-Checker] ❌ Failed to fetch fresh data:`, err);
+//         }
+//       } else {
+//         // Execute actions from existing automation
+//         console.log(`[Auto-Checker] Executing ${auto.rawActions.length} actions for "${auto.name}"`);
+        
+//         for (const action of auto.rawActions) {
+//           let deviceId = null;
+//           if (typeof action.device === 'string') {
+//             deviceId = action.device;
+//           } else if (action.device?._id) {
+//             deviceId = action.device._id;
+//           } else if (action.device_id) {
+//             deviceId = action.device_id;
+//           }
+          
+//           if (deviceId) {
+//             console.log(`[Auto-Checker] Executing ${action.action} on device ${deviceId}`);
+//             try {
+//               await apiFetch(`/devices/${deviceId}/control`, token, {
+//                 method: "POST",
+//                 body: JSON.stringify({ action: action.action })
+//               });
+//               console.log(`[Auto-Checker] ✅ Executed ${action.action}`);
+//             } catch (err) {
+//               console.error(`[Auto-Checker] ❌ Failed to execute action:`, err);
+//             }
+//           }
+//         }
+//       }
+      
+//       lastAutoRun.current[auto._backendId] = now.getTime();
+      
+//       // Refresh devices after execution
+//       setTimeout(async () => {
+//         const devicesList = await fetchDevices();
+//         await fetchAutomations(devicesList, true);
+//       }, 30000);
+//     }
+//   }
+// }, [automations, token, fetchDevices, fetchAutomations]);
 
 //   useEffect(() => {
 //     const tok = token || localStorage.getItem("token");
 //     if (!tok) return;
 
- 
 //     setAutomations([]);
 //     setDevices([]);
 
@@ -288,6 +420,38 @@
 //       await fetchAutomations(devicesList);
 //     };
 //     init();
+
+//     const pollId = setInterval(async () => {
+//       const tok2 = token || localStorage.getItem("token");
+//       if (!tok2) return;
+//       try {
+//         const currentUser = user || JSON.parse(localStorage.getItem("user") || "{}");
+//         const userId = currentUser?._id || currentUser?.id;
+//         const devData = await apiFetch("/devices", tok2);
+//         const allDevices = devData?.data?.devices || devData?.devices || [];
+
+//         const homeData = await apiFetch("/homes/mine", tok2);
+//         const home = homeData?.data?.home || homeData?.home;
+//         const homeId = home?.id || home?._id;
+//         let filteredDevs = allDevices;
+//         if (homeId) {
+//           const roomData = await apiFetch(`/rooms/${homeId}/rooms`, tok2);
+//           const roomList = roomData?.data?.rooms || roomData?.rooms || [];
+//           const roomIdSet = buildRoomIdSet(roomList);
+//           filteredDevs = allDevices.filter(d => deviceBelongsToUser(d, roomIdSet));
+//         }
+//         setDevices(filteredDevs);
+
+//         const strategy = new LiveAutomationStrategy();
+//         const data = await strategy.fetch(tok2, filteredDevs, userId);
+//         setAutomations(data);
+//         setOnline(true);
+//       } catch {
+//         setOnline(false);
+//       }
+//     }, 15000);
+
+//     return () => clearInterval(pollId);
 //   }, [token]);
 
 //   useEffect(() => {
@@ -297,6 +461,14 @@
 //       setSubmitError("");
 //     }
 //   }, [newModal]);
+
+//   // Clear run result after 5 seconds
+//   useEffect(() => {
+//     if (runResult) {
+//       const timer = setTimeout(() => setRunResult(null), 5000);
+//       return () => clearTimeout(timer);
+//     }
+//   }, [runResult]);
 
 //   const dispatch = (command, apiCall) => {
 //     setAutomations(prev => {
@@ -325,7 +497,7 @@
 //     inactive: automations.filter(a => !a.isOn).length,
 //   }), [automations]);
 
-//   const activeAutos   = automations.filter(a => a.isOn);
+//   const activeAutos = automations.filter(a => a.isOn);
 //   const inactiveAutos = automations.filter(a => !a.isOn);
 
 //   const updateActionRow = (index, updated) => {
@@ -365,7 +537,7 @@
 //         body: JSON.stringify({
 //           name: updated.name,
 //           isActive: updated.isOn,
-//           trigger:  updated.rawTrigger,
+//           trigger: updated.rawTrigger,
 //         }),
 //       })
 //     );
@@ -388,7 +560,7 @@
 //       : { type: "CONDITION", condition: { field: "energy_kwh", operator: "gt", value: 10 } };
 
 //     const payload = {
-//       name:    newForm.name.trim(),
+//       name: newForm.name.trim(),
 //       trigger,
 //       actions: newForm.actions.map(a => ({ device_id: a.device_id, action: a.action })),
 //     };
@@ -410,12 +582,123 @@
 //     }
 //   };
 
+//   // FIXED: Complete runNow function that works with existing backend
 //   const runNow = async (auto) => {
 //     setRunningId(auto.id);
+//     setRunResult(null);
+    
 //     try {
-//       await apiFetch(`/automations/${auto._backendId}/run`, token, { method: "POST" });
+//       console.log("=== RUNNING AUTOMATION MANUALLY ===");
+//       console.log("Automation:", auto.name);
+//       console.log("Automation ID:", auto._backendId);
+//       console.log("Raw Actions:", auto.rawActions);
+      
+//       // Check if there are actions
+//       if (!auto.rawActions || auto.rawActions.length === 0) {
+//         throw new Error("No actions configured for this automation");
+//       }
+      
+//       // Execute actions directly via device control endpoint
+//       const actionResults = [];
+//       let allSuccessful = true;
+      
+//       for (let i = 0; i < auto.rawActions.length; i++) {
+//         const action = auto.rawActions[i];
+        
+//         // Extract device ID from various possible formats
+//         let deviceId = null;
+//         if (typeof action.device === 'string') {
+//           deviceId = action.device;
+//         } else if (action.device?._id) {
+//           deviceId = action.device._id;
+//         } else if (action.device_id) {
+//           deviceId = action.device_id;
+//         } else if (action.device?.toString && action.device.toString() !== '[object Object]') {
+//           deviceId = action.device.toString();
+//         }
+        
+//         if (!deviceId) {
+//           console.error(`Action ${i}: Could not extract device ID from:`, action);
+//           actionResults.push({ 
+//             actionNumber: i + 1,
+//             action: action.action, 
+//             error: "No device ID found",
+//             success: false 
+//           });
+//           allSuccessful = false;
+//           continue;
+//         }
+        
+//         console.log(`Action ${i + 1}: Executing ${action.action} on device ${deviceId}`);
+        
+//         try {
+//           // Call the device control endpoint
+//           const controlResponse = await apiFetch(`/devices/${deviceId}/control`, token, {
+//             method: "POST",
+//             body: JSON.stringify({ action: action.action })
+//           });
+          
+//           actionResults.push({
+//             actionNumber: i + 1,
+//             deviceId: deviceId,
+//             action: action.action,
+//             success: true,
+//             response: controlResponse
+//           });
+          
+//           console.log(`Action ${i + 1}: ✅ Successfully executed ${action.action}`);
+          
+//           // Small delay between actions
+//           if (i < auto.rawActions.length - 1) {
+//             await new Promise(resolve => setTimeout(resolve, 500));
+//           }
+          
+//         } catch (actionError) {
+//           console.error(`Action ${i + 1}: ❌ Failed:`, actionError);
+//           actionResults.push({
+//             actionNumber: i + 1,
+//             action: action.action,
+//             error: actionError.message,
+//             success: false
+//           });
+//           allSuccessful = false;
+//         }
+//       }
+      
+//       // Set result message
+//       if (allSuccessful) {
+//         setRunResult({
+//           success: true,
+//           automationName: auto.name,
+//           message: `✅ "${auto.name}" executed successfully! ${actionResults.length} action(s) completed.`,
+//           details: actionResults,
+//           timestamp: new Date().toLocaleTimeString()
+//         });
+//       } else {
+//         const successCount = actionResults.filter(r => r.success).length;
+//         setRunResult({
+//           success: false,
+//           automationName: auto.name,
+//           message: `⚠️ "${auto.name}" partially executed. ${successCount}/${actionResults.length} actions succeeded.`,
+//           details: actionResults,
+//           timestamp: new Date().toLocaleTimeString()
+//         });
+//       }
+      
+//       // Refresh devices and automations after execution
+//       setTimeout(async () => {
+//         const devicesList = await fetchDevices();
+//         await fetchAutomations(devicesList, true);
+//       }, 1000);
+      
 //     } catch (err) {
-//       console.error("Run failed:", err.message);
+//       console.error("Run failed:", err);
+//       setRunResult({
+//         success: false,
+//         automationName: auto.name,
+//         message: `❌ Failed to execute "${auto.name}": ${err.message}`,
+//         timestamp: new Date().toLocaleTimeString()
+//       });
 //     } finally {
 //       setTimeout(() => setRunningId(null), 1500);
 //     }
@@ -440,12 +723,12 @@
 //   };
 
 //   const card = { background: "white", borderRadius: "14px", boxShadow: "0 6px 15px rgba(0,0,0,0.06)", padding: "20px" };
-//   const inputStyle   = { width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1.5px solid #e0dcea", fontSize: "14px", outline: "none", color: "#1a1a1a", background: "white", boxSizing: "border-box" };
+//   const inputStyle = { width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1.5px solid #e0dcea", fontSize: "14px", outline: "none", color: "#1a1a1a", background: "white", boxSizing: "border-box" };
 //   const btnPrimary = { background: submitting ? "#aaa" : GREEN, color: "white", border: "none", borderRadius: "8px", padding: "10px 20px", fontSize: "14px", fontWeight: "600", cursor: submitting ? "not-allowed" : "pointer" };
 //   const btnSecondary = { background: "#f0f0f0", color: "#555", border: "none", borderRadius: "8px", padding: "10px 20px", fontSize: "14px", fontWeight: "600", cursor: "pointer" };
 //   const modalBox = { position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", background: "white", borderRadius: "16px", boxShadow: "0 20px 60px rgba(0,0,0,0.20)", padding: "28px", width: "min(500px, 92vw)", zIndex: 1001, maxHeight: "88vh", overflowY: "auto", animation: "slideUp 0.25s ease" };
 
-//   const FieldLabel  = ({ text }) => <p style={{ margin: "0 0 6px", fontSize: "13px", fontWeight: "600", color: "#444" }}>{text}</p>;
+//   const FieldLabel = ({ text }) => <p style={{ margin: "0 0 6px", fontSize: "13px", fontWeight: "600", color: "#444" }}>{text}</p>;
 //   const ModalHeader = ({ title, onClose }) => (
 //     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
 //       <h5 style={{ margin: 0, fontWeight: "700", fontSize: "17px", color: "#1a1a1a" }}>{title}</h5>
@@ -461,7 +744,7 @@
 //     return (
 //       <div style={{ ...card, transition: "transform 0.3s ease, box-shadow 0.3s ease" }}
 //         onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 12px 28px rgba(92,53,176,0.10)"; }}
-//         onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)";    e.currentTarget.style.boxShadow = "0 6px 15px rgba(0,0,0,0.06)"; }}>
+//         onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 6px 15px rgba(0,0,0,0.06)"; }}>
 //         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "16px" }}>
 //           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
 //             <div style={{ width: "46px", height: "46px", borderRadius: "12px", background: auto.isOn ? "rgba(92,53,176,0.10)" : "#f0eef8", display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${auto.isOn ? "rgba(92,53,176,0.22)" : "#e4e0f0"}` }}>
@@ -470,6 +753,11 @@
 //             <div>
 //               <p style={{ margin: 0, fontWeight: "700", fontSize: "15px", color: "#1a1a1a" }}>{auto.name}</p>
 //               <p style={{ margin: 0, fontSize: "12px", color: "#888", marginTop: "2px" }}>{auto.schedule}</p>
+//               {auto.lastRunAt && (
+//                 <p style={{ margin: 0, fontSize: "11px", color: "#63a17f", marginTop: "2px", display: "flex", alignItems: "center", gap: "4px" }}>
+//                   <Clock size={10} /> Last ran {new Date(auto.lastRunAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+//                 </p>
+//               )}
 //             </div>
 //           </div>
 //           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -502,8 +790,8 @@
 //   };
 
 //   const statCards = [
-//     { label: "Total", value: stats.total,    accent: ACCENT,    bg: "#f3f0fc" },
-//     { label: "Active", value: stats.active,   accent: "#b8860b", bg: "#fdf8e8" },
+//     { label: "Total", value: stats.total, accent: ACCENT, bg: "#f3f0fc" },
+//     { label: "Active", value: stats.active, accent: "#b8860b", bg: "#fdf8e8" },
 //     { label: "Inactive", value: stats.inactive, accent: "#5a85c8", bg: "#eef3fb" },
 //   ];
 
@@ -511,8 +799,8 @@
 //     <Layout>
 //       <div style={{ minHeight: "100vh", background: "linear-gradient(135deg,#f8f9fa,#eef3f7)" }}>
 
-//         <div className="container-fluid d-flex align-items-center justify-content-between">
-//           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+//         <div className="container-fluid d-flex align-items-center justify-content-between" style={{ padding: "16px 24px" }}>
+//           <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
 //             <StatusPill online={online} loading={loadingAutos} />
 //             {history.length > 0 && (
 //               <button onClick={undoLast}
@@ -522,7 +810,7 @@
 //             )}
 //           </div>
 //           <button onClick={() => setNewModal(true)}
-//             className="btn text-white d-flex align-items-center mt-3"
+//             className="btn text-white d-flex align-items-center"
 //             style={{ background: "#63a17f", border: "1px solid #63a17f", borderRadius: "8px", gap: "6px", fontSize: "13px", fontWeight: 600, padding: "6px 14px" }}>
 //             <Plus size={16} /> New Automation
 //           </button>
@@ -534,6 +822,43 @@
 //             <h2 style={{ margin: "0 0 4px", fontWeight: "800", fontSize: "22px", color: "#1a1a1a" }}>Automations</h2>
 //             <p style={{ margin: 0, fontSize: "14px", color: "#777" }}>Create and manage your smart home routines</p>
 //           </div>
+
+//           {/* Run Result Notification */}
+//           {runResult && (
+//             <div style={{ 
+//               ...card, 
+//               marginBottom: "20px", 
+//               background: runResult.success ? "#e8f5ee" : "#fee8e8", 
+//               border: `1px solid ${runResult.success ? "#63a17f" : "#c03030"}`,
+//               animation: "slideDown 0.3s ease"
+//             }}>
+//               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+//                 <div style={{ flex: 1 }}>
+//                   <p style={{ margin: 0, fontWeight: "600", color: runResult.success ? GREEN : "#c03030" }}>
+//                     {runResult.message}
+//                   </p>
+//                   <p style={{ margin: "4px 0 0", fontSize: "11px", color: "#888" }}>
+//                     {runResult.timestamp}
+//                   </p>
+//                   {runResult.details && runResult.details.length > 0 && (
+//                     <details style={{ marginTop: "8px" }}>
+//                       <summary style={{ fontSize: "11px", cursor: "pointer", color: "#666" }}>View details</summary>
+//                       <div style={{ marginTop: "6px", fontSize: "11px" }}>
+//                         {runResult.details.map((detail, idx) => (
+//                           <div key={idx} style={{ padding: "2px 0", color: detail.success ? GREEN : "#c03030" }}>
+//                             Action {detail.actionNumber}: {detail.action} - {detail.success ? "✓ Success" : `✗ ${detail.error}`}
+//                           </div>
+//                         ))}
+//                       </div>
+//                     </details>
+//                   )}
+//                 </div>
+//                 <button onClick={() => setRunResult(null)} style={{ background: "none", border: "none", cursor: "pointer" }}>
+//                   <X size={16} color="#888" />
+//                 </button>
+//               </div>
+//             </div>
+//           )}
 
 //           <div className="row g-3" style={{ marginBottom: "32px" }}>
 //             {statCards.map((s, i) => (
@@ -703,7 +1028,7 @@
 //                     onChange={e => setSettingsAuto(s => ({
 //                       ...s,
 //                       rawTrigger: { ...s.rawTrigger, time: e.target.value },
-//                       schedule:   `Every day at ${e.target.value}`,
+//                       schedule: `Every day at ${e.target.value}`,
 //                     }))} />
 //                 </div>
 //               )}
@@ -731,8 +1056,9 @@
 //       )}
 
 //       <style>{`
-//         @keyframes fadeIn  { from { opacity: 0 } to { opacity: 1 } }
+//         @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
 //         @keyframes slideUp { from { opacity: 0; transform: translate(-50%, -46%) } to { opacity: 1; transform: translate(-50%, -50%) } }
+//         @keyframes slideDown { from { opacity: 0; transform: translateY(-10px) } to { opacity: 1; transform: translateY(0) } }
 //         @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
 //         h5 { font-size: 1.1rem; }
 //       `}</style>
@@ -772,6 +1098,128 @@ const iconMap = {
   moon: Moon, plane: Plane, TIME: Sun, CONDITION: Zap,
 };
 
+// 
+// STRATEGY PATTERN - Trigger Strategy
+// 
+
+/**
+ * Strategy Interface - 
+ * All trigger strategies must implement this
+ */
+class TriggerStrategy {
+  getDescription(trigger) {
+    throw new Error("Method must be implemented");
+  }
+  
+  shouldExecute(trigger, lastRunTime) {
+    throw new Error("Method must be implemented");
+  }
+  
+  getScheduleDisplay(trigger) {
+    throw new Error("Method must be implemented");
+  }
+}
+
+/**
+ * Concrete Strategy - Time-based trigger
+ */
+class TimeTriggerStrategy extends TriggerStrategy {
+  getDescription(trigger) {
+    return `Every day at ${trigger.time}`;
+  }
+  
+  shouldExecute(trigger, lastRunTime, currentTime = new Date()) {
+    if (!trigger.time) return false;
+    
+    const [scheduledHour, scheduledMinute] = trigger.time.split(':').map(Number);
+    const currentHour = currentTime.getHours();
+    const currentMinute = currentTime.getMinutes();
+    
+    const timeMatch = currentHour === scheduledHour && currentMinute === scheduledMinute;
+    const alreadyRanRecently = lastRunTime && (currentTime.getTime() - lastRunTime) < 120000;
+    
+    return timeMatch && !alreadyRanRecently;
+  }
+  
+  getScheduleDisplay(trigger) {
+    return `Every day at ${trigger.time}`;
+  }
+}
+
+/**
+ * Concrete Strategy - Condition-based trigger
+ */
+class ConditionTriggerStrategy extends TriggerStrategy {
+  getDescription(trigger) {
+    const condition = trigger.condition || {};
+    return `When ${condition.field || 'device'} ${condition.operator || 'changes'} ${condition.value || ''}`;
+  }
+  
+  shouldExecute(trigger, lastRunTime, currentTime = new Date()) {
+    // Condition-based triggers are evaluated by the backend
+
+    return false;
+  }
+  
+  getScheduleDisplay(trigger) {
+    const condition = trigger.condition || {};
+    const field = condition.field || 'device';
+    const operator = condition.operator || 'changes';
+    const value = condition.value || '';
+    
+    const operatorMap = {
+      'gt': '>',
+      'lt': '<',
+      'eq': '=',
+      'gte': '≥',
+      'lte': '≤',
+      'changes': 'changes'
+    };
+    
+    return `${field} ${operatorMap[operator] || operator} ${value}`.trim();
+  }
+}
+
+/**
+ * Context - Uses the selected strategy
+ */
+class TriggerContext {
+  constructor(strategy) {
+    this._strategy = strategy;
+  }
+  
+  setStrategy(strategy) {
+    this._strategy = strategy;
+  }
+  
+  getDescription(trigger) {
+    return this._strategy.getDescription(trigger);
+  }
+  
+  shouldExecute(trigger, lastRunTime, currentTime) {
+    return this._strategy.shouldExecute(trigger, lastRunTime, currentTime);
+  }
+  
+  getScheduleDisplay(trigger) {
+    return this._strategy.getScheduleDisplay(trigger);
+  }
+}
+
+// Strategy factory
+const TriggerStrategyFactory = {
+  create(triggerType) {
+    switch (triggerType) {
+      case 'TIME':
+        return new TimeTriggerStrategy();
+      case 'CONDITION':
+        return new ConditionTriggerStrategy();
+      default:
+        return new TimeTriggerStrategy();
+    }
+  }
+};
+
+
 class AutomationFactory {
   static create({ name, schedule = "Manual", trigger = "manual", actions = [], isOn = false, icon }) {
     return {
@@ -783,11 +1231,11 @@ class AutomationFactory {
 
   static fromBackend(rule, devicesList = []) {
     const triggerType = rule.trigger?.type || "manual";
-    const schedule = triggerType === "TIME"
-      ? `Every day at ${rule.trigger.time}`
-      : triggerType === "CONDITION"
-      ? `When ${rule.trigger.condition?.field} ${rule.trigger.condition?.operator} ${rule.trigger.condition?.value}`
-      : "Manual trigger";
+    
+    // Use Strategy Pattern to get the schedule description
+    const strategy = TriggerStrategyFactory.create(triggerType);
+    const context = new TriggerContext(strategy);
+    const schedule = context.getScheduleDisplay(rule.trigger);
 
     const actionLabels = (rule.actions || []).map((a) => {
       let deviceId = null;
@@ -1021,7 +1469,7 @@ const Automations = () => {
     }
   }, [token, user]);
 
-  // Debug: Log all automations with their scheduled times
+
   useEffect(() => {
     if (automations.length > 0) {
       console.log("=== ALL AUTOMATIONS DETAILS ===");
@@ -1066,11 +1514,10 @@ const checkAndExecuteDueAutomations = useCallback(async () => {
     const alreadyRanRecently = lastRun && (now.getTime() - lastRun) < 120000;
     
     if (timeMatch && !alreadyRanRecently) {
-      console.log(`[Auto-Checker] 🎯 Executing automation: ${auto.name} at ${currentTimeStr} (scheduled: ${scheduledTime})`);
-      
-      // Check if automation has actions
+      console.log(`[Auto-Checker] Executing automation: ${auto.name} at ${currentTimeStr} (scheduled: ${scheduledTime})`);
+
       if (!auto.rawActions || auto.rawActions.length === 0) {
-        console.error(`[Auto-Checker] ❌ Automation "${auto.name}" has no actions configured!`);
+        console.error(`[Auto-Checker] Automation "${auto.name}" has no actions configured!`);
         
         // Try to fetch fresh automation data from backend
         try {
@@ -1081,8 +1528,7 @@ const checkAndExecuteDueAutomations = useCallback(async () => {
           const rule = freshData?.data?.rule || freshData?.rule;
           if (rule && rule.actions && rule.actions.length > 0) {
             console.log(`[Auto-Checker] Found ${rule.actions.length} actions in fresh data!`);
-            
-            // Execute actions from fresh data
+      
             for (const action of rule.actions) {
               let deviceId = null;
               if (typeof action.device === 'string') {
@@ -1100,20 +1546,20 @@ const checkAndExecuteDueAutomations = useCallback(async () => {
                     method: "POST",
                     body: JSON.stringify({ action: action.action })
                   });
-                  console.log(`[Auto-Checker] ✅ Executed ${action.action}`);
+                  console.log(`[Auto-Checker] Executed ${action.action}`);
                 } catch (err) {
-                  console.error(`[Auto-Checker] ❌ Failed to execute action:`, err);
+                  console.error(`[Auto-Checker] Failed to execute action:`, err);
                 }
               }
             }
           } else {
-            console.error(`[Auto-Checker] ❌ Still no actions found for "${auto.name}"`);
+            console.error(`[Auto-Checker] Still no actions found for "${auto.name}"`);
           }
         } catch (err) {
-          console.error(`[Auto-Checker] ❌ Failed to fetch fresh data:`, err);
+          console.error(`[Auto-Checker] Failed to fetch fresh data:`, err);
         }
       } else {
-        // Execute actions from existing automation
+      
         console.log(`[Auto-Checker] Executing ${auto.rawActions.length} actions for "${auto.name}"`);
         
         for (const action of auto.rawActions) {
@@ -1133,21 +1579,20 @@ const checkAndExecuteDueAutomations = useCallback(async () => {
                 method: "POST",
                 body: JSON.stringify({ action: action.action })
               });
-              console.log(`[Auto-Checker] ✅ Executed ${action.action}`);
+              console.log(`[Auto-Checker]  Executed ${action.action}`);
             } catch (err) {
-              console.error(`[Auto-Checker] ❌ Failed to execute action:`, err);
+              console.error(`[Auto-Checker] Failed to execute action:`, err);
             }
           }
         }
       }
       
       lastAutoRun.current[auto._backendId] = now.getTime();
-      
-      // Refresh devices after execution
+
       setTimeout(async () => {
         const devicesList = await fetchDevices();
         await fetchAutomations(devicesList, true);
-      }, 30000);
+      }, 60000);
     }
   }
 }, [automations, token, fetchDevices, fetchAutomations]);
@@ -1206,7 +1651,6 @@ const checkAndExecuteDueAutomations = useCallback(async () => {
     }
   }, [newModal]);
 
-  // Clear run result after 5 seconds
   useEffect(() => {
     if (runResult) {
       const timer = setTimeout(() => setRunResult(null), 5000);
@@ -1326,7 +1770,6 @@ const checkAndExecuteDueAutomations = useCallback(async () => {
     }
   };
 
-  // FIXED: Complete runNow function that works with existing backend
   const runNow = async (auto) => {
     setRunningId(auto.id);
     setRunResult(null);
@@ -1336,20 +1779,18 @@ const checkAndExecuteDueAutomations = useCallback(async () => {
       console.log("Automation:", auto.name);
       console.log("Automation ID:", auto._backendId);
       console.log("Raw Actions:", auto.rawActions);
-      
-      // Check if there are actions
+
       if (!auto.rawActions || auto.rawActions.length === 0) {
         throw new Error("No actions configured for this automation");
       }
       
-      // Execute actions directly via device control endpoint
+
       const actionResults = [];
       let allSuccessful = true;
       
       for (let i = 0; i < auto.rawActions.length; i++) {
         const action = auto.rawActions[i];
-        
-        // Extract device ID from various possible formats
+
         let deviceId = null;
         if (typeof action.device === 'string') {
           deviceId = action.device;
@@ -1376,7 +1817,7 @@ const checkAndExecuteDueAutomations = useCallback(async () => {
         console.log(`Action ${i + 1}: Executing ${action.action} on device ${deviceId}`);
         
         try {
-          // Call the device control endpoint
+      
           const controlResponse = await apiFetch(`/devices/${deviceId}/control`, token, {
             method: "POST",
             body: JSON.stringify({ action: action.action })
@@ -1390,9 +1831,8 @@ const checkAndExecuteDueAutomations = useCallback(async () => {
             response: controlResponse
           });
           
-          console.log(`Action ${i + 1}: ✅ Successfully executed ${action.action}`);
+          console.log(`Action ${i + 1}: Successfully executed ${action.action}`);
           
-          // Small delay between actions
           if (i < auto.rawActions.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 500));
           }
@@ -1408,13 +1848,12 @@ const checkAndExecuteDueAutomations = useCallback(async () => {
           allSuccessful = false;
         }
       }
-      
-      // Set result message
+    
       if (allSuccessful) {
         setRunResult({
           success: true,
           automationName: auto.name,
-          message: `✅ "${auto.name}" executed successfully! ${actionResults.length} action(s) completed.`,
+          message: ` "${auto.name}" executed successfully! ${actionResults.length} action(s) completed.`,
           details: actionResults,
           timestamp: new Date().toLocaleTimeString()
         });
@@ -1429,11 +1868,11 @@ const checkAndExecuteDueAutomations = useCallback(async () => {
         });
       }
       
-      // Refresh devices and automations after execution
+
       setTimeout(async () => {
         const devicesList = await fetchDevices();
         await fetchAutomations(devicesList, true);
-      }, 1000);
+      }, 1500);
       
     } catch (err) {
       console.error("Run failed:", err);
@@ -1567,7 +2006,7 @@ const checkAndExecuteDueAutomations = useCallback(async () => {
             <p style={{ margin: 0, fontSize: "14px", color: "#777" }}>Create and manage your smart home routines</p>
           </div>
 
-          {/* Run Result Notification */}
+
           {runResult && (
             <div style={{ 
               ...card, 

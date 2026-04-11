@@ -48,7 +48,7 @@ const filterEventsByUserDevices = (events, userDeviceIds) => {
   if (!userDeviceIds || userDeviceIds.size === 0) return [];
   
   const filtered = events.filter(event => {
-    // The device field is a string ID in your events
+   
     const deviceId = event.device?.toString() || 
                      event.deviceId?.toString() ||
                      event.device_id?.toString();
@@ -207,20 +207,19 @@ const EmptyBox = ({ height = 220, message = "No data available" }) => (
 const Analytics = () => {
   const { token, user } = useAuth();
 
-  const [devices,        setDevices]        = useState([]);
-  const [allEvents,      setAllEvents]      = useState([]);
+  const [devices,  setDevices] = useState([]);
+  const [allEvents, setAllEvents] = useState([]);
   const [filteredEvents, setFilteredEvents] = useState([]);
   const [loadingDevices, setLoadingDevices] = useState(true);
-  const [loadingEvents,  setLoadingEvents]  = useState(true);
-  const [devicesOnline,  setDevicesOnline]  = useState(false);
-  const [eventsOnline,   setEventsOnline]   = useState(false);
+  const [loadingEvents, setLoadingEvents] = useState(true);
+  const [devicesOnline,  setDevicesOnline] = useState(false);
+  const [eventsOnline, setEventsOnline] = useState(false);
 
   const fetchDevices = useCallback(async (t) => {
     setLoadingDevices(true);
     try {
       const tok = t || token || localStorage.getItem("token");
 
-      // Get this user's home
       const homeData = await apiFetch("/homes/mine", tok);
       const home     = homeData?.data?.home || homeData?.home;
       const homeId   = home?.id || home?._id;
@@ -231,20 +230,17 @@ const Analytics = () => {
         return { filteredDevices: [], deviceIds: new Set() };
       }
 
-      // 2. Get rooms for this home
       const roomData = await apiFetch(`/rooms/${homeId}/rooms`, tok);
       const roomList = roomData?.data?.rooms || roomData?.rooms || [];
       const roomIdSet = buildRoomIdSet(roomList);
 
-      // 3. Get all devices, filter to only this home's rooms
       const devData  = await apiFetch("/devices", tok);
       const allDevices = devData?.data?.devices || devData?.devices || [];
 
       const filtered = allDevices.filter(d => deviceBelongsToUser(d, roomIdSet));
       setDevices(filtered);
       setDevicesOnline(true);
-      
-      // Return both filtered devices and their IDs for event filtering
+
       const deviceIds = new Set(filtered.map(d => d._id?.toString() || d.id?.toString()));
       return { filteredDevices: filtered, deviceIds };
     } catch (error) {
@@ -290,7 +286,6 @@ const Analytics = () => {
     setFilteredEvents([]);
 
     const init = async () => {
-      
       const { deviceIds } = await fetchDevices(tok);
       
       await fetchEvents(deviceIds);
@@ -315,9 +310,9 @@ const Analytics = () => {
   const hourlyData = useMemo(() => deriveHourlyActivity(filteredEvents),[filteredEvents]);
   const peakHour = useMemo(() => derivePeakHour(hourlyData),         [hourlyData]);
   const actionBarData = useMemo(() => [
-    { action: "ON",    count: eventStats.ON,    color: "#63a17f"  },
-    { action: "OFF",   count: eventStats.OFF,   color: "#5c35b0"  },
-    { action: "IDLE",  count: eventStats.IDLE,  color: "#b8860b"  },
+    { action: "ON", count: eventStats.ON, color: "#63a17f"  },
+    { action: "OFF", count: eventStats.OFF, color: "#5c35b0"  },
+    { action: "IDLE", count: eventStats.IDLE, color: "#b8860b"  },
     { action: "FAULT", count: eventStats.FAULT, color: "#c03030"  },
   ], [eventStats]);
 
@@ -363,8 +358,8 @@ const Analytics = () => {
                   { label: "FAULT", value: deviceStats.fault,                                                                      color: "#c03030", bg: "#fef2f2" },
                   { label: "Live Power", value: `${deviceStats.livePowerW}W`,                                                           color: "#b8860b", bg: "#fdf8e8" },
                   { label: "Total", value: `${deviceStats.totalCapacityW}W`,                                                       color: "#5c35b0", bg: "#f2f0fa" },
-                  { label: "Utilization",   value: `${utilizationPct}%`,                                                                   color: "#5c35b0", bg: "#f2f0fa" },
-                  { label: "Health Score",  value: `${deviceStats.healthScore}%`, color: deviceStats.healthScore > 80 ? "#2e8b57" : "#c03030", bg: deviceStats.healthScore > 80 ? "#f0faf4" : "#fef2f2" },
+                  { label: "Utilization", value: `${utilizationPct}%`,                                                                   color: "#5c35b0", bg: "#f2f0fa" },
+                  { label: "Health Score", value: `${deviceStats.healthScore}%`, color: deviceStats.healthScore > 80 ? "#2e8b57" : "#c03030", bg: deviceStats.healthScore > 80 ? "#f0faf4" : "#fef2f2" },
                 ].map((s, i) => (
                   <div key={i} className="col-6 col-md-4 col-lg">
                     <div style={{ background: s.bg, borderRadius: "10px", padding: "10px 14px", textAlign: "center" }}>
@@ -393,15 +388,15 @@ const Analytics = () => {
               <div className="row g-3">
                 {[
                   { label: "Total Events",  value: eventStats.total, color: "#5c35b0", bg: "#ebe8f8" },
-                  { label: "ON Events",     value: eventStats.ON, color: "#2e8b57", bg: "#f0faf4" },
-                  { label: "OFF Events",    value: eventStats.OFF, color: "#888",    bg: "#f5f5f5" },
-                  { label: "IDLE Events",   value: eventStats.IDLE, color: "#b8860b", bg: "#fdf8e8" },
-                  { label: "FAULT Events",  value: eventStats.FAULT, color: "#c03030", bg: "#fef2f2" },
-                  { label: "Peak Hour",     value: peakHour, color: "#5c35b0", bg: "#ebe8f8" },
+                  { label: "ON Events", value: eventStats.ON, color: "#2e8b57", bg: "#f0faf4" },
+                  { label: "OFF Events", value: eventStats.OFF, color: "#888", bg: "#f5f5f5" },
+                  { label:"IDLE Events", value: eventStats.IDLE, color: "#b8860b", bg: "#fdf8e8" },
+                  { label: "FAULT Events", value: eventStats.FAULT, color: "#c03030", bg: "#fef2f2" },
+                  { label: "Peak Hour", value: peakHour, color: "#5c35b0", bg: "#ebe8f8" },
                 ].map((s, i) => (
                   <div key={i} className="col-6 col-md-4 col-lg-2">
-                    <div style={{ background: s.bg, borderRadius: "10px", padding: "10px 14px", textAlign: "center" }}>
-                      <p style={{ margin: "0 0 2px", fontSize: "11px", fontWeight: "700", color: s.color, textTransform: "uppercase" }}>{s.label}</p>
+                    <div style={{background: s.bg, borderRadius: "10px", padding: "10px 14px", textAlign: "center" }}>
+                      <p style={{margin: "0 0 2px", fontSize: "11px", fontWeight: "700", color: s.color, textTransform: "uppercase" }}>{s.label}</p>
                       <p style={{ margin: 0, fontSize: s.label === "Peak Hour" ? "14px" : "18px", fontWeight: "800", color: s.color, lineHeight: 1 }}>{s.value}</p>
                     </div>
                   </div>
@@ -414,7 +409,7 @@ const Analytics = () => {
         )}
 
         <div style={{ ...card, marginBottom: "24px" }}>
-          <SectionLabel text="Device Activity — Last 24 Hours" live={eventsOnline} />
+          <SectionLabel text="Device Activity Last 24 Hours" live={eventsOnline} />
           <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#aaa" }}>
             {eventsOnline
               ? `${eventStats.total} events from your devices bucketed by hour · peak at ${peakHour}`
@@ -424,8 +419,19 @@ const Analytics = () => {
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={hourlyData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e8eaf0" />
-                <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#aaa" }} interval={3} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#aaa" }} />
+                <XAxis 
+      dataKey="hour" 
+      axisLine={false} 
+      tickLine={false} 
+      tick={{ fontSize: 10, fill: "#aaa" }} 
+      interval={3}
+      label={{ value: "Time ", position: "insideBottom", offset: 2, fill: "#888", fontSize: 12 }} />
+                <YAxis 
+      axisLine={false} 
+      tickLine={false} 
+      tick={{ fontSize: 11, fill: "#aaa" }}
+      label={{ value: "Watts (W)", angle: -90, position: "insideLeft",offset: 5, fill: "#888", fontSize: 11 }}
+    />
                 <Tooltip content={<CustomTooltip />} />
                 <Line type="monotone" dataKey="events" name="Events" stroke="#5c35b0" strokeWidth={2.5} dot={false} activeDot={{ r: 5, fill: "#5c35b0" }} />
               </LineChart>
@@ -476,12 +482,11 @@ const Analytics = () => {
                   </BarChart>
                 </ResponsiveContainer>
               )}
-            </div>
-          </div>
+</div>
+         </div>
 
         </div>
 
- 
         <div style={{ ...card, marginBottom: "24px" }}>
           <SectionLabel text="Device Count by Type" live={devicesOnline} />
           {loadingDevices ? <LoadingBox height={260} /> : !devicesOnline || devicePieData.length === 0 ? <EmptyBox height={260} /> : (
