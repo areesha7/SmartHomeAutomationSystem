@@ -26,6 +26,9 @@ const apiFetch = async (path, token, options = {}) => {
 
 /* 
    OBSERVER PATTERN IMPLEMENTATION
+   the ProfileManager acts as the subject that manages profile data, while the React component acts as 
+   the observer by subscribing to updates. Whenever the data is modified through the manager,
+    it triggers a notification to all subscribed observers, causing the UI to update automatically
 */
 
 class ProfileManager {
@@ -245,7 +248,7 @@ const Profile = () => {
 
   // ── Unified save handler ─────────────────────────────────────────────────
   const handleSave = async () => {
-    // Profile tab → PATCH /users/me (name only; email not editable)
+
     if (activeTab === "profile") {
       try {
         await apiFetch("/users/me", token, {
@@ -259,7 +262,6 @@ const Profile = () => {
       return;
     }
 
-    // Security tab → PATCH /users/me/password
     if (activeTab === "security") {
       const { current, new: newPw, confirm } = data.profile;
       if (!current || !newPw || !confirm)
@@ -283,7 +285,6 @@ const Profile = () => {
       return;
     }
 
-    // Home tab → PATCH /homes/:homeId (admin only)
     if (activeTab === "home") {
       if (userRole !== "ADMIN") {
         return showToastMsg("Only admins can update home details.", true);
@@ -306,7 +307,7 @@ const Profile = () => {
       return;
     }
 
-    // Notifications / Preferences — local only
+    // Notifications / Preferences
     showToastMsg("Settings saved successfully!");
   };
 
@@ -315,7 +316,6 @@ const Profile = () => {
     if (!e.target.files || !e.target.files[0]) return;
     const file = e.target.files[0];
     
-    // Check file size - warn if too large
     if (file.size > 1024 * 1024) { // 1MB
       showToastMsg("Image too large. Please select an image under 1MB.", true);
       return;
@@ -328,16 +328,14 @@ const Profile = () => {
       // Compress the image
       const compressedBase64 = await compressImage(file);
       
-      // Update preview immediately
+      
       manager.setProfileImage(compressedBase64);
       
-      // Store in user-specific localStorage
       const storageKey = getAvatarStorageKey();
       if (storageKey) {
         localStorage.setItem(storageKey, compressedBase64);
       }
       
-      // Send to backend
       try {
         const response = await fetch(`${BASE_URL}/users/me`, {
           method: "PATCH",
@@ -357,7 +355,7 @@ const Profile = () => {
         showToastMsg("Profile picture updated!");
         
       } catch (uploadErr) {
-        // Even if backend fails, we still have the image in localStorage and UI
+        
         console.warn("Backend upload failed, but image saved locally:", uploadErr);
         showToastMsg("Image saved locally. Will sync when connection improves.", false);
       }
@@ -480,10 +478,7 @@ const Profile = () => {
                         <div style={{ fontSize: "22px", fontWeight: "bold", color: primaryColor }}>{homeResidents}</div>
                         <div style={{ fontSize: "12px", color: colors.gray }}>Residents</div>
                       </div>
-                      <div style={{ flex: 1, padding: "14px", borderRadius: "8px", background: colors.inputBg, textAlign: "center" }}>
-                        <div style={{ fontSize: "22px", fontWeight: "bold", color: primaryColor }}>{homeRooms}</div>
-                        <div style={{ fontSize: "12px", color: colors.gray }}>Rooms</div>
-                      </div>
+                     
                       <div style={{ flex: 1, padding: "14px", borderRadius: "8px", background: colors.inputBg, textAlign: "center" }}>
                         <div style={{ fontSize: "22px", fontWeight: "bold", color: primaryColor }}>{userRole}</div>
                         <div style={{ fontSize: "12px", color: colors.gray }}>Your Role</div>

@@ -109,7 +109,7 @@ const ACTION_ICONS = {
 
 function useClock() {
   const [t, setT] = useState(new Date());
-  useEffect(() => { const id = setInterval(() => setT(new Date()), 1000); return () => clearInterval(id); }, []);
+  useEffect(() => { const id = setInterval(() => setT(new Date()), 9000); return () => clearInterval(id); }, []);
   return t;
 }
 
@@ -692,7 +692,7 @@ const Dashboard = () => {
                   </div>
                 </div>
 
-                <div className="hq-card" onClick={() => navigate("/rooms")}
+                <div className="hq-card" onClick={() => navigate("/profile")}
                   style={{ ...card, cursor: "pointer", padding: "20px", display: "flex", alignItems: "center", gap: "14px" }}>
                   <div style={{ width: "46px", height: "46px", background: "#f3f0fc", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <Users size={22} color={PURPLE} />

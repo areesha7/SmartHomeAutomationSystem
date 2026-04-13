@@ -27,28 +27,19 @@ const iconMap = {
   moon: Moon, plane: Plane, TIME: Sun, CONDITION: Zap,
 };
 
+//  STRATEGY PATTERN 
+// Problem: TIME and CONDITION triggers behave differently.
+// Solution: Each trigger type gets its own strategy class with a common
+// interface. TriggerContext holds the active strategy and delegates to it.
 
-// STRATEGY PATTERN
-//
-// Problem: TIME and CONDITION triggers behave differently — they have different
-// descriptions, display formats, and execution logic.
-//
-// Solution: Define a common interface (TriggerStrategy) and create one concrete
-// class per trigger type. The TriggerContext holds whichever strategy is active
-// and delegates calls to it — the caller never needs to know which type it is.
-//
-// Adding a new trigger type (e.g. LOCATION) means adding one new class here,
-// nothing else changes.
-
-
-// Abstract interface — all strategies must implement these three methods
+// Abstract base: all strategies must implement these three methods
 class TriggerStrategy {
   getDescription(trigger)              { throw new Error("Method must be implemented"); }
   shouldExecute(trigger, lastRunTime)  { throw new Error("Method must be implemented"); }
   getScheduleDisplay(trigger)          { throw new Error("Method must be implemented"); }
 }
 
-// Concrete Strategy — handles TIME-based triggers
+// Handles TIME-based triggers 
 class TimeTriggerStrategy extends TriggerStrategy {
   getDescription(trigger) {
     return `Every day at ${trigger.time}`;
@@ -67,7 +58,7 @@ class TimeTriggerStrategy extends TriggerStrategy {
   }
 }
 
-// Concrete Strategy — handles CONDITION-based triggers (evaluated server-side)
+
 class ConditionTriggerStrategy extends TriggerStrategy {
   getDescription(trigger) {
     const condition = trigger.condition || {};
@@ -75,7 +66,7 @@ class ConditionTriggerStrategy extends TriggerStrategy {
   }
 
   shouldExecute(trigger, lastRunTime, currentTime = new Date()) {
-    return false;
+    return false; 
   }
 
   getScheduleDisplay(trigger) {
@@ -85,7 +76,7 @@ class ConditionTriggerStrategy extends TriggerStrategy {
   }
 }
 
-// Context — holds the active strategy and delegates calls to it
+// Context : holds the active strategy and delegates calls to it
 class TriggerContext {
   constructor(strategy)          { this._strategy = strategy; }
   setStrategy(strategy)          { this._strategy = strategy; }
@@ -94,7 +85,7 @@ class TriggerContext {
   getScheduleDisplay(trigger)    { return this._strategy.getScheduleDisplay(trigger); }
 }
 
-// Factory that picks the right strategy based on trigger type string
+// Picks the right strategy based on the trigger type 
 const TriggerStrategyFactory = {
   create(triggerType) {
     switch (triggerType) {
@@ -105,16 +96,9 @@ const TriggerStrategyFactory = {
   }
 };
 
-
-// FACTORY PATTERN
-//
-// Problem: Automation objects are created in multiple places and the backend
-// response shape could change at any time.
-//
-// Solution: AutomationFactory is the single place responsible for building
-// automation objects — both from scratch (create) and from backend data
-// (fromBackend). If the API shape changes, only this class needs updating.
-
+//  FACTORY PATTERN 
+// Single place responsible for building automation objects — both from scratch
+// and from backend data. If the API shape changes, only this class needs updating.
 
 class AutomationFactory {
 
@@ -125,11 +109,10 @@ class AutomationFactory {
       icon: icon || iconMap[trigger] || Zap,
     };
   }
-  // Uses TriggerStrategyFactory to compute the schedule display string.
+
   static fromBackend(rule, devicesList = []) {
     const triggerType = rule.trigger?.type || "manual";
 
-    // Use the Strategy Pattern to get the correct schedule description
     const strategy = TriggerStrategyFactory.create(triggerType);
     const context  = new TriggerContext(strategy);
     const schedule = context.getScheduleDisplay(rule.trigger);
@@ -162,16 +145,10 @@ class AutomationFactory {
   }
 }
 
-
-// COMMAND PATTERN
-//
-// Problem: Toggle, add, delete, and update actions need to be undoable.
-// Passing API calls and state updates everywhere makes this messy.
-//
-// Solution: Each user action is a Command object with execute() and undo().
-// The dispatch() function runs the command, saves it to a history stack,
-// and calls the API. If the API fails, undo() is called automatically.
-// The Undo button just pops the last command from history and calls undo().
+//  COMMAND PATTERN 
+// Each user action (toggle, add, delete, update) is a Command with execute()
+// and undo(). The dispatch() function runs the command optimistically and rolls
+// back automatically if the API call fails. Undo pops the last command.
 
 class ToggleCommand {
   constructor(id) { this.id = id; }
@@ -193,7 +170,6 @@ class DeleteCommand {
     return list.filter(a => a.id !== this.id);
   }
   undo(list) {
-
     const result = [...list];
     result.splice(this._index, 0, this._deleted);
     return result;
@@ -218,6 +194,7 @@ const buildRoomIdSet = (rooms) => {
   return ids;
 };
 
+
 const deviceBelongsToUser = (device, roomIdSet) => {
   if (!device.room) return false;
   const roomId = typeof device.room === "object"
@@ -237,6 +214,22 @@ const ACCENT         = "#5c35b0";
 const GREEN          = "#63a17f";
 const ACTION_OPTIONS = ["ON", "OFF", "IDLE"];
 
+
+const CONDITION_FIELDS = [
+  { value: "energy_kwh",  label: "Energy (kWh)" },
+  { value: "temperature", label: "Temperature" },
+  { value: "humidity",    label: "Humidity" },
+  { value: "status",      label: "Status" },
+];
+
+
+const CONDITION_OPERATORS = [
+  { value: "gt",  label: ">" },
+  { value: "lt",  label: "<" },
+  { value: "eq",  label: "=" },
+  { value: "gte", label: "≥" },
+  { value: "lte", label: "≤" },
+];
 
 const Toggle = ({ isOn, onChange }) => (
   <label style={{ position: "relative", display: "inline-block", width: "44px", height: "24px", cursor: "pointer", flexShrink: 0 }}>
@@ -263,6 +256,7 @@ const StatusPill = ({ online, loading }) => (
     {loading ? "Loading..." : online ? "Live" : "Offline"}
   </span>
 );
+
 
 const DeviceActionRow = ({ row, devices, loadingDevices, onChange, onRemove, showRemove }) => (
   <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
@@ -293,7 +287,7 @@ const Automations = () => {
   const [loadingDevices, setLoadingDevices] = useState(false);
   const [online,         setOnline]         = useState(false);
 
-  // Command Pattern — history stack for undo support
+  // Command Pattern : history stack enables the Undo button
   const [history,      setHistory]      = useState([]);
   const [runningId,    setRunningId]    = useState(null);
   const [newModal,     setNewModal]     = useState(false);
@@ -302,16 +296,17 @@ const Automations = () => {
   const [submitting,   setSubmitting]   = useState(false);
   const [runResult,    setRunResult]    = useState(null);
 
+  // Tracks the last time each automation ran to prevent double-firing within 2 min
   const lastAutoRun = useRef({});
 
   const emptyForm = {
     name: "", triggerType: "TIME", triggerTime: "07:00",
+    conditionField: "energy_kwh", conditionOperator: "gt", conditionValue: "",
     actions: [{ device_id: "", action: "ON" }],
   };
   const [newForm, setNewForm] = useState(emptyForm);
 
-  // Fetches devices scoped to the logged-in user's home
- 
+  // Fetches devices scoped to the logged-in user's home via room membership
   const fetchDevices = useCallback(async (t) => {
     setLoadingDevices(true);
     try {
@@ -338,6 +333,7 @@ const Automations = () => {
     }
   }, [token]);
 
+  // Fetches automations for the current user and transforms them via AutomationFactory
   const fetchAutomations = useCallback(async (devicesList = [], silent = false) => {
     if (!silent) setLoadingAutos(true);
     try {
@@ -348,12 +344,11 @@ const Automations = () => {
       const data  = await apiFetch("/automations", tok);
       const rules = data?.data?.rules || data?.rules || [];
 
-      // Only show automations created by the current user
+
       const filtered = userId
         ? rules.filter(r => r.createdBy?.toString() === userId.toString())
         : rules;
 
-      // Use Factory to transform each raw rule into the UI shape
       setAutomations(filtered.map(r => AutomationFactory.fromBackend(r, devicesList)));
       setOnline(true);
     } catch {
@@ -373,7 +368,6 @@ const Automations = () => {
         console.log(`  scheduled time: ${auto.rawTrigger?.time}`);
         console.log(`  full trigger:`, auto.rawTrigger);
       });
-
     }
   }, [automations]);
 
@@ -405,6 +399,7 @@ const Automations = () => {
         console.log(`[Auto-Checker] Executing automation: ${auto.name} at ${currentTimeStr}`);
 
         if (!auto.rawActions || auto.rawActions.length === 0) {
+          
           console.error(`[Auto-Checker] Automation "${auto.name}" has no actions — fetching fresh data`);
           try {
             const freshData = await apiFetch(`/automations/${auto._backendId}`, token);
@@ -423,7 +418,7 @@ const Automations = () => {
             console.error(`[Auto-Checker] Failed to fetch fresh data:`, err);
           }
         } else {
-
+          // Execute each action sequentially : Command Pattern
           for (const action of auto.rawActions) {
             const deviceId = typeof action.device === 'string' ? action.device : action.device?._id || action.device_id;
             if (deviceId) {
@@ -498,6 +493,7 @@ const Automations = () => {
     return () => clearInterval(pollId);
   }, [token]);
 
+
   useEffect(() => {
     if (newModal) {
       fetchDevices();
@@ -506,6 +502,7 @@ const Automations = () => {
     }
   }, [newModal]);
 
+
   useEffect(() => {
     if (runResult) {
       const timer = setTimeout(() => setRunResult(null), 5000);
@@ -513,8 +510,8 @@ const Automations = () => {
     }
   }, [runResult]);
 
-  // ── Command Pattern dispatch 
-  // Runs a command optimistically (updates UI first), saves it to history,
+  //  Command Pattern dispatch 
+  // Runs a command optimistically (updates UI first), saves to history,
   // and rolls back automatically if the API call fails.
   const dispatch = (command, apiCall) => {
     setAutomations(prev => {
@@ -530,6 +527,7 @@ const Automations = () => {
     }
   };
 
+  // Pops the last command from history and calls its undo()
   const undoLast = () => {
     if (!history.length) return;
     const last = history[history.length - 1];
@@ -550,7 +548,7 @@ const Automations = () => {
   const addActionRow    = ()                => setNewForm(f => ({ ...f, actions: [...f.actions, { device_id: "", action: "ON" }] }));
   const removeActionRow = (index)           => setNewForm(f => ({ ...f, actions: f.actions.filter((_, i) => i !== index) }));
 
-  // Toggle an automation on/off uses Command Pattern for undo support
+  // Toggle uses Command Pattern so it can be undone locally
   const handleToggle = (auto) => {
     dispatch(
       new ToggleCommand(auto.id),
@@ -561,7 +559,7 @@ const Automations = () => {
     );
   };
 
-  // Delete an automation uses Command Pattern so it can be undone locally
+  // Delete uses Command Pattern so it can be undone locally
   const handleDelete = (auto) => {
     dispatch(
       new DeleteCommand(auto.id),
@@ -570,7 +568,6 @@ const Automations = () => {
     setSettingsAuto(null);
   };
 
-  // Update name / schedule / status from the settings modal
   const handleUpdate = (updated) => {
     dispatch(
       new UpdateCommand(updated),
@@ -586,12 +583,13 @@ const Automations = () => {
     setSubmitError("");
     if (!newForm.name.trim())                                         { setSubmitError("Automation name is required.");                    return; }
     if (newForm.triggerType === "TIME" && !/^\d{2}:\d{2}$/.test(newForm.triggerTime)) { setSubmitError("Please enter a valid time in HH:MM format."); return; }
+    if (newForm.triggerType === "CONDITION" && !newForm.conditionValue) { setSubmitError("Please enter a condition value.");              return; }
     if (newForm.actions.length === 0)                                 { setSubmitError("At least one action is required.");               return; }
     if (newForm.actions.find(a => !a.device_id))                     { setSubmitError("Please select a device for every action.");       return; }
 
     const trigger = newForm.triggerType === "TIME"
       ? { type: "TIME", time: newForm.triggerTime }
-      : { type: "CONDITION", condition: { field: "energy_kwh", operator: "gt", value: 10 } };
+      : { type: "CONDITION", condition: { field: newForm.conditionField, operator: newForm.conditionOperator, value: Number(newForm.conditionValue) } };
 
     const payload = {
       name: newForm.name.trim(), trigger,
@@ -617,7 +615,7 @@ const Automations = () => {
     setRunResult(null);
 
     try {
-      console.log("=== RUNNING AUTOMATION MANUALLY ===");
+      console.log(" RUNNING AUTOMATION MANUALLY ");
       console.log("Automation:", auto.name, "| ID:", auto._backendId);
       console.log("Raw Actions:", auto.rawActions);
 
@@ -630,6 +628,7 @@ const Automations = () => {
 
       for (let i = 0; i < auto.rawActions.length; i++) {
         const action   = auto.rawActions[i];
+
         const deviceId = typeof action.device === 'string' ? action.device
           : action.device?._id  ? action.device._id
           : action.device_id    ? action.device_id
@@ -651,7 +650,6 @@ const Automations = () => {
           actionResults.push({ actionNumber: i + 1, deviceId, action: action.action, success: true, response: controlResponse });
           console.log(`Action ${i + 1}: Executed successfully`);
 
-       
           if (i < auto.rawActions.length - 1) await new Promise(resolve => setTimeout(resolve, 500));
         } catch (actionError) {
           console.error(`Action ${i + 1}: Failed`, actionError);
@@ -674,7 +672,7 @@ const Automations = () => {
       setTimeout(async () => {
         const devicesList = await fetchDevices();
         await fetchAutomations(devicesList, true);
-      }, 1500);
+      }, 6000);
 
     } catch (err) {
       console.error("Run failed:", err);
@@ -698,7 +696,6 @@ const Automations = () => {
       const newRule = AutomationFactory.fromBackend(data?.data?.rule || data?.rule, devices);
       dispatch(new AddCommand(newRule));
     } catch {
-      // Fall back to a local-only entry if the API call fails
       const local = AutomationFactory.create({ name: s.name, trigger: s.trigger, icon: s.icon });
       dispatch(new AddCommand(local));
     }
@@ -759,13 +756,13 @@ const Automations = () => {
               </li>
             ))}
         </ul>
-        {showRun && (
+        {/* {showRun && (
           <button onClick={() => runNow(auto)}
             style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "9px 0", borderRadius: "8px", border: "1.5px solid #e0dcea", background: isRunning ? "rgba(92,53,176,0.08)" : "white", cursor: "pointer", fontSize: "13px", fontWeight: "600", color: isRunning ? ACCENT : "#444", transition: "all 0.2s ease" }}>
             <Play size={13} color={isRunning ? ACCENT : "#666"} strokeWidth={2.5} />
             {isRunning ? "Running..." : "Run Now"}
           </button>
-        )}
+        )} */}
       </div>
     );
   };
@@ -776,12 +773,10 @@ const Automations = () => {
     { label: "Inactive", value: stats.inactive, accent: "#5a85c8", bg: "#eef3fb" },
   ];
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <Layout>
       <div style={{ minHeight: "100vh", background: "linear-gradient(135deg,#f8f9fa,#eef3f7)" }}>
 
-        {/* Top bar — status pill + undo button + new automation button */}
         <div className="container-fluid d-flex align-items-center justify-content-between" style={{ padding: "16px 24px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
             <StatusPill online={online} loading={loadingAutos} />
@@ -806,6 +801,7 @@ const Automations = () => {
             <p style={{ margin: 0, fontSize: "14px", color: "#777" }}>Create and manage your smart home routines</p>
           </div>
 
+          {/* Run result banner — auto-dismisses after 5s */}
           {runResult && (
             <div style={{ ...card, marginBottom: "20px", background: runResult.success ? "#e8f5ee" : "#fee8e8", border: `1px solid ${runResult.success ? "#63a17f" : "#c03030"}`, animation: "slideDown 0.3s ease" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -832,7 +828,6 @@ const Automations = () => {
             </div>
           )}
 
-          {/* Stat cards */}
           <div className="row g-3" style={{ marginBottom: "32px" }}>
             {statCards.map((s, i) => (
               <div key={i} className="col-6 col-md-3">
@@ -893,6 +888,7 @@ const Automations = () => {
         </div>
       </div>
 
+
       {newModal && (
         <>
           <Overlay onClick={() => setNewModal(false)} />
@@ -917,6 +913,33 @@ const Automations = () => {
                   <FieldLabel text="Scheduled Time" />
                   <input style={inputStyle} type="time" value={newForm.triggerTime}
                     onChange={e => setNewForm(f => ({ ...f, triggerTime: e.target.value }))} />
+                </div>
+              )}
+
+              {newForm.triggerType === "CONDITION" && (
+                <div>
+                  <FieldLabel text="Condition" />
+                  <p style={{ margin: "0 0 8px", fontSize: "11px", color: "#aaa" }}>Automation fires when a device reading matches this condition</p>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <select
+                      value={newForm.conditionField}
+                      onChange={e => setNewForm(f => ({ ...f, conditionField: e.target.value }))}
+                      style={{ flex: 2, padding: "9px 12px", borderRadius: "8px", border: "1.5px solid #e0dcea", fontSize: "13px", outline: "none", color: "#1a1a1a", background: "white", boxSizing: "border-box" }}>
+                      {CONDITION_FIELDS.map(cf => <option key={cf.value} value={cf.value}>{cf.label}</option>)}
+                    </select>
+                    <select
+                      value={newForm.conditionOperator}
+                      onChange={e => setNewForm(f => ({ ...f, conditionOperator: e.target.value }))}
+                      style={{ flex: 1, padding: "9px 12px", borderRadius: "8px", border: "1.5px solid #e0dcea", fontSize: "13px", outline: "none", color: "#1a1a1a", background: "white", boxSizing: "border-box" }}>
+                      {CONDITION_OPERATORS.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
+                    </select>
+                    <input
+                      type="number"
+                      placeholder="Value"
+                      value={newForm.conditionValue}
+                      onChange={e => setNewForm(f => ({ ...f, conditionValue: e.target.value }))}
+                      style={{ flex: 1, padding: "9px 12px", borderRadius: "8px", border: `1.5px solid ${newForm.conditionValue ? "#e0dcea" : "#f0a0a0"}`, fontSize: "13px", outline: "none", color: "#1a1a1a", background: "white", boxSizing: "border-box" }} />
+                  </div>
                 </div>
               )}
               <div>
