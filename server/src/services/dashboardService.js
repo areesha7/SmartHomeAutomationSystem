@@ -71,7 +71,8 @@ class DashboardService {
       .lean();
     const deviceIds = devices.map((d) => d._id);
 
-    const today = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
+    // const today = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
+    const today = new Date().toLocaleDateString('en-CA');
 
     // ── 3. Fire all sub-queries in parallel ──────────────────────────────────
     const [
@@ -92,7 +93,10 @@ class DashboardService {
       EnergyRecord.aggregate([
         { $match: { room: { $in: roomIds }, date: today, endedAt: { $ne: null } } },
         { $group: { _id: null, total: { $sum: '$energyKwh' } } },
-      ]),
+      ]).then(res => {
+          if (res.length === 0) console.log(`[Dashboard] No energy records found for date: ${today}`);
+          return res;
+      }),
 
       // Open (live) sessions — estimate current draw by joining device wattage
       EnergyRecord.aggregate([

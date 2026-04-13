@@ -7,7 +7,7 @@
  */
 
 const BaseController = require('./baseController');
-const DeviceService  = require('../services/DeviceService');
+const DeviceService  = require('../services/deviceService');
 
 class DeviceController extends BaseController {
 
