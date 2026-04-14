@@ -9,7 +9,7 @@ import {
   Zap, Lightbulb, Thermometer, Lock, Power, ChevronRight,
   Wifi, Cpu, WifiOff, RotateCcw, AlertTriangle, Home, Activity,
   Bell, Battery, TrendingUp, Shield, Users, RefreshCw, Settings, UserCog,
-  Clock, Play, PowerOff
+  Clock, Play, PowerOff, GitBranch
 } from "lucide-react";
 import { motion } from "framer-motion";
 import Layout from "../Components/Layout";
@@ -159,7 +159,7 @@ const Dashboard = () => {
 
 
   const resolveHomeId = useCallback(async (summaryData) => {
-    const homeIdFromSummary = summaryData?.home?._id || summaryData?.home?.id;
+    const homeIdFromSummary = summaryData?.home?.id || summaryData?.home?._id;
     if (homeIdFromSummary) {
       setUserHomeId(homeIdFromSummary);
       return homeIdFromSummary;
@@ -188,26 +188,40 @@ const Dashboard = () => {
       const isAdmin = user?.role === "ADMIN" || user?.user?.role === "ADMIN";
 
       if (isAdmin) {
-        const { data } = await apiFetch(`/alerts/home/${homeId}`, token);
-        const alerts   = data?.data || data;
-
+        const { data } = await apiFetch(`/alerts/home/${homeId}?limit=100`, token);
+        const responseData = data?.data || data;
+        const alertsList = responseData?.data || responseData || [];
+        const totalAlerts = responseData?.pagination?.total || alertsList.length || 0;
+        
+        const unreadCount = alertsList.filter(a => !a.isRead).length;
+        const criticalCount = alertsList.filter(a => a.severity === "critical" && !a.isRead).length;
+        
+        console.log("[Dashboard] Admin alerts fetched:", { totalAlerts, unreadCount, criticalCount });
+        
         setScopedAlerts({
-          unread:   alerts?.unread   ?? alerts?.filter?.(a => !a.isRead)?.length ?? 0,
-          critical: alerts?.critical ?? alerts?.filter?.(a => a.severity === "CRITICAL")?.length ?? 0,
-          total:    alerts?.total    ?? alerts?.length ?? 0,
+          unread: unreadCount,
+          critical: criticalCount,
+          total: totalAlerts,
         });
       } else {
         const { data } = await apiFetch(`/alerts/stats`, token);
-        const stats    = data?.data || data;
-
+        const stats = data?.data || data;
+        
+        console.log("[Dashboard] Resident alerts stats:", stats);
+        
         setScopedAlerts({
-          unread:   stats?.unread   ?? 0,
+          unread: stats?.unread ?? 0,
           critical: stats?.critical ?? 0,
-          total:    stats?.total    ?? 0,
+          total: stats?.total ?? 0,
         });
       }
     } catch (err) {
       console.error("[Dashboard] fetchScopedAlerts failed:", err);
+      setScopedAlerts({
+        unread: 0,
+        critical: 0,
+        total: 0,
+      });
     }
   }, [token, user]);
 
@@ -217,19 +231,26 @@ const Dashboard = () => {
       const { data } = await apiFetch("/dashboard", token);
       const s = data?.data || data;
       console.log("[DEBUG] Full dashboard response:", s);
-    console.log("[DEBUG] Energy object:", s?.energy);
-    console.log("[DEBUG] TodayKwh value:", s?.energy?.todayKwh);
+      console.log("[DEBUG] Energy object:", s?.energy);
+      console.log("[DEBUG] TodayKwh value:", s?.energy?.todayKwh);
+      console.log("[DEBUG] Automations:", s?.automations);
       setSummary(s);
       setOnline(true);
 
+      // Fetch fresh devices list to ensure accurate counts
       const { data: devData } = await apiFetch("/devices", token);
       const devList = devData?.data?.devices || devData?.devices || [];
+      console.log("[DEBUG] Devices fetched:", devList.length, "devices");
+      console.log("[DEBUG] Active automations:", s?.automations?.active);
       setAllDevices(devList);
 
       const homeId = await resolveHomeId(s);
-      await fetchScopedAlerts(homeId);
+      if (homeId) {
+        await fetchScopedAlerts(homeId);
+      }
 
-    } catch {
+    } catch (err) {
+      console.error("[Dashboard] fetchDashboard error:", err);
       setOnline(false);
     } finally {
       setLoading(false);
@@ -237,11 +258,49 @@ const Dashboard = () => {
   }, [token, resolveHomeId, fetchScopedAlerts]);
 
   useEffect(() => {
+    const handleDeviceChange = () => {
+      console.log("[Dashboard] Device change detected, refreshing...");
+      fetchDashboard();
+    };
+    
+    const handleStorageChange = (e) => {
+      if (e.key === 'token' || e.key === 'user') {
+        fetchDashboard();
+      }
+    };
+    
+ 
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log("[Dashboard] Tab visible, refreshing...");
+        fetchDashboard();
+      }
+    };
+    
+    window.addEventListener('device-updated', handleDeviceChange);
+    window.addEventListener('storage', handleStorageChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      window.removeEventListener('device-updated', handleDeviceChange);
+      window.removeEventListener('storage', handleStorageChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [fetchDashboard]);
+
+  useEffect(() => {
     if (!token && !localStorage.getItem("token")) return;
     fetchDashboard();
     const id = setInterval(fetchDashboard, 30000);
     return () => clearInterval(id);
-  }, [token]);
+  }, [token, fetchDashboard]);
+
+  // Refetch alerts when homeId changes
+  useEffect(() => {
+    if (userHomeId) {
+      fetchScopedAlerts(userHomeId);
+    }
+  }, [userHomeId, fetchScopedAlerts]);
 
   useEffect(() => {
     const onL = d => console.log("[Observer] Lights →", d.state);
@@ -285,7 +344,7 @@ const Dashboard = () => {
 
   const statCards = [
     { title: "Active Devices",   value: devices?.byStatus?.on ?? 0,    suffix: "",    sub: `of ${devices?.total ?? 0} total`,       icon: Zap,          accent: PURPLE },
-    { title: "Lights On",        value: devices?.byType?.light ?? 0,   suffix: "",    sub: "LIGHT devices in home",                  icon: Lightbulb,    accent: GOLD   },
+    { title: "Active Automations", value: automations?.active ?? 0,   suffix: "",    sub: `${automations?.total ?? 0} total rules`, icon: GitBranch,    accent: GOLD   },
     { title: "Live Wattage",     value: energy?.liveWattage ?? 0,      suffix: "W",   sub: `${energy?.liveSessions ?? 0} sessions`,  icon: Activity,     accent: P      },
     { title: "Unread Alerts",    value: alerts?.unread ?? 0,           suffix: "",    sub: `${alerts?.critical ?? 0} critical`,      icon: AlertTriangle,accent: RED    },
   ];
@@ -481,6 +540,20 @@ const Dashboard = () => {
                   </div>
                 </div>
 
+                <div style={{ ...card, padding: "20px" }}>
+                  <p style={{ margin: "0 0 12px", fontSize: "11px", fontWeight: "700", color: "#9a90b8", textTransform: "uppercase", letterSpacing: "0.08em" }}>Automation Rules</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {[
+                      { label: "Active rules",     value: automations?.active ?? 0,  color: GOLD   },
+                      { label: "Total rules",      value: automations?.total ?? 0,   color: PURPLE },
+                    ].map(row => (
+                      <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: "13px", color: "#555" }}>{row.label}</span>
+                        <span style={{ fontSize: "13px", fontWeight: "700", color: row.color }}>{row.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </motion.div>
           )}
@@ -724,4 +797,3 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
-

@@ -1,3 +1,4 @@
+
 /**
  * 
  * FACTORY METHOD PATTERN - Simplified
@@ -28,6 +29,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LineChart, Line, Legend,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  PieChart, Pie, Cell, AreaChart, Area,
 } from "recharts";
 import { Activity, GitBranch, Zap, Play, RotateCcw, CheckCircle, RefreshCw } from "lucide-react";
 
@@ -414,6 +416,13 @@ export default function ModelingSimulation() {
   const [backendLambda, setBackendLambda] = useState(null);
   const [loadingLambda, setLoadingLambda] = useState(false);
 
+
+  const [energyDaily,   setEnergyDaily]   = useState(null);
+  const [energyWeekly,  setEnergyWeekly]  = useState(null);
+  const [energyLive,    setEnergyLive]    = useState(null);
+  const [energyLoading, setEnergyLoading] = useState(false);
+  const [energyTab,     setEnergyTab]     = useState("overview");
+
   const scenarioMap = {
     normal: "NORMAL", peak: "HIGH_USAGE", energy: "ENERGY_SAVING",
     sensor: "HIGH_USAGE", emergency: "HIGH_USAGE",
@@ -446,6 +455,9 @@ export default function ModelingSimulation() {
 
       const filtered = allDevs.filter(d => deviceBelongsToUser(d, roomIdSet));
       setFilteredDevices(filtered);
+
+      
+      fetchEnergy(hId);
 
       return new Set(filtered.map(d => (d._id || d.id)?.toString()));
     } catch (err) {
@@ -490,6 +502,27 @@ export default function ModelingSimulation() {
       return null;
     } finally {
       setLoadingLambda(false);
+    }
+  };
+
+  const fetchEnergy = async (hId) => {
+    if (!hId) return;
+    setEnergyLoading(true);
+    try {
+      const headers = getHeaders();
+      const today = new Date().toLocaleDateString('en-CA');
+      const [dailyRes, weeklyRes, liveRes] = await Promise.all([
+        axios.get(`${API}/energy/home/${hId}/daily?date=${today}`, { headers }),
+        axios.get(`${API}/energy/home/${hId}/weekly`, { headers }),
+        axios.get(`${API}/energy/home/${hId}/live`, { headers }),
+      ]);
+      setEnergyDaily(dailyRes.data?.data || dailyRes.data);
+      setEnergyWeekly(weeklyRes.data?.data || weeklyRes.data);
+      setEnergyLive(liveRes.data?.data || liveRes.data);
+    } catch (err) {
+      console.error("[Energy] fetch failed:", err);
+    } finally {
+      setEnergyLoading(false);
     }
   };
 
@@ -654,7 +687,7 @@ export default function ModelingSimulation() {
   return (
     <Layout>
       <div style={{ minHeight: "100vh", background: "linear-gradient(135deg,#f8f9fa,#eef3f7)", padding: "24px" }}>
-
+{/* 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "32px" }}>
           <div>
             <h1 style={{ margin: "0 0 6px", fontWeight: "800", fontSize: "24px", color: "#1a1a1a" }}>Modeling & Simulation</h1>
@@ -669,7 +702,7 @@ export default function ModelingSimulation() {
             style={{ display: "flex", alignItems: "center", gap: "6px", background: "white", border: "1.5px solid #e0dcea", borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontSize: "13px", fontWeight: "600", color: "#555" }}>
             <RefreshCw size={14} /> Refresh
           </button>
-        </div>
+        </div> */}
 
         {error && (
           <div style={{ background: "#fee8e8", border: "1px solid #fdd", borderRadius: "10px", padding: "12px 16px", marginBottom: "20px", fontSize: "13px", color: "#c03030" }}>
@@ -685,6 +718,525 @@ export default function ModelingSimulation() {
         ) : (
           <>
             <SectionHeader
+              title="Energy Consumption Summary"
+              
+              icon={Zap} color={GOLD}
+            />
+
+
+            <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
+              {[
+                { id: "overview", label: "🏠 Home Overview" },
+                { id: "rooms",    label: "🚪 By Room" },
+                { id: "devices",  label: "💡 By Device" },
+                { id: "weekly",   label: "📅 Weekly Trend" },
+                { id: "live",     label: "⚡ Live Sessions" },
+              ].map(tab => (
+                <button key={tab.id} onClick={() => setEnergyTab(tab.id)}
+                  style={{ padding: "8px 16px", borderRadius: "20px", border: energyTab === tab.id ? `2px solid ${GOLD}` : "1.5px solid #e0dcea", background: energyTab === tab.id ? `${GOLD}15` : "white", color: energyTab === tab.id ? GOLD : "#777", fontSize: "13px", fontWeight: "700", cursor: "pointer", transition: "all 0.2s" }}>
+                  {tab.label}
+                </button>
+              ))}
+              <button onClick={() => fetchEnergy(homeId)} disabled={energyLoading}
+                style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", borderRadius: "20px", border: "1.5px solid #e0dcea", background: "white", color: "#777", fontSize: "13px", cursor: "pointer" }}>
+                <RefreshCw size={13} style={{ animation: energyLoading ? "spin 1s linear infinite" : "none" }} />
+                {energyLoading ? "Loading..." : "Refresh"}
+              </button>
+            </div>
+
+            {energyLoading ? (
+              <div style={{ ...card, textAlign: "center", padding: "60px", color: "#aaa", marginBottom: "32px" }}>
+                <RefreshCw size={28} color="#e0dcea" style={{ animation: "spin 1s linear infinite" }} />
+                <p style={{ margin: "12px 0 0" }}>Fetching energy data...</p>
+              </div>
+            ) : (
+              <div style={{ marginBottom: "32px" }}>
+
+                {/* ── HOME OVERVIEW TAB ── */}
+                {energyTab === "overview" && (() => {
+                  const todayKwh   = energyDaily?.totalKwh ?? 0;
+                  const weekKwh    = energyWeekly?.totalKwh ?? 0;
+                  const liveSess   = (energyLive?.records || []).length;
+                  const liveWatt   = (energyLive?.records || []).reduce((s, r) => s + (r.watt || 0), 0);
+                  const weekData   = (energyWeekly?.byDay || []).map(d => ({ date: d.date?.slice(5), kwh: d.totalKwh }));
+                  const topRooms   = [...(energyDaily?.byRoom || [])].sort((a,b) => b.totalKwh - a.totalKwh).slice(0, 5);
+                  const PIE_COLORS = ["#5c35b0","#63a17f","#b8860b","#2a7ec8","#c03030"];
+                  return (
+                    <>
+                     
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "14px", marginBottom: "20px" }}>
+                        {[
+                          { label: "Consumed Today",  value: `${todayKwh} kWh`, color: GOLD,   bg: "#fdf8e8", icon: "⚡" },
+                          { label: "This Week", value: `${weekKwh} kWh`, color: ACCENT, bg: "#f3f0fc", icon: "📅" },
+                          { label: "Live Sessions",   value: liveSess, color: GREEN,  bg: "#e8f5ee", icon: "🟢" },
+                          { label: "Live Draw", value: `${liveWatt} W`, color: "#2a7ec8", bg: "#e8f4fc", icon: "📡" },
+                        ].map(k => (
+                          <div key={k.label} style={{ ...card, padding: "20px", background: k.bg, border: `1.5px solid ${k.color}25` }}>
+                            <div style={{ fontSize: "24px", marginBottom: "6px" }}>{k.icon}</div>
+                            <div style={{ fontSize: "26px", fontWeight: "800", color: k.color, lineHeight: 1 }}>{k.value}</div>
+                            <div style={{ fontSize: "12px", color: "#777", marginTop: "4px", fontWeight: "600" }}>{k.label}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="row g-3">
+                        {/* Weekly */}
+                        <div className="col-md-7">
+                          <div style={card}>
+                            <h5 style={{ margin: "0 0 4px", fontWeight: "700", fontSize: "14px", color: "#1a1a1a" }}>Weekly Consumption (kWh)</h5>
+                            <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#aaa" }}>7-day trend for your home</p>
+                            {weekData.length === 0 ? (
+                              <div style={{ textAlign: "center", padding: "40px", color: "#ccc", fontSize: "13px" }}>No weekly data yet</div>
+                            ) : (
+                              <ResponsiveContainer width="100%" height={220}>
+                                <AreaChart data={weekData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
+                                  <defs>
+                                    <linearGradient id="kwhGrad" x1="0" y1="0" x2="0" y2="1">
+                                      <stop offset="5%"  stopColor={GOLD} stopOpacity={0.25} />
+                                      <stop offset="95%" stopColor={GOLD} stopOpacity={0.02} />
+                                    </linearGradient>
+                                  </defs>
+                                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e8eaf0" />
+                                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#aaa" }} />
+                                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#aaa" }} unit=" kWh" />
+                                  <Tooltip contentStyle={{ borderRadius: "10px", border: "1px solid #e0dcea", fontSize: "13px" }} formatter={v => [`${v} kWh`, "Energy"]} />
+                                  <Area type="monotone" dataKey="kwh" stroke={GOLD} strokeWidth={2.5} fill="url(#kwhGrad)" dot={{ r: 4, fill: GOLD, strokeWidth: 0 }} activeDot={{ r: 6 }} />
+                                </AreaChart>
+                              </ResponsiveContainer>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Room  */}
+                        <div className="col-md-5">
+                          <div style={{ ...card, height: "100%" }}>
+                            <h5 style={{ margin: "0 0 4px", fontWeight: "700", fontSize: "14px", color: "#1a1a1a" }}>Today by Room</h5>
+                            <p style={{ margin: "0 0 12px", fontSize: "12px", color: "#aaa" }}>Share of today's consumption</p>
+                            {topRooms.length === 0 ? (
+                              <div style={{ textAlign: "center", padding: "40px", color: "#ccc", fontSize: "13px" }}>No data for today</div>
+                            ) : (
+                              <>
+                                <ResponsiveContainer width="100%" height={160}>
+                                  <PieChart>
+                                    <Pie data={topRooms} dataKey="totalKwh" nameKey="roomName" cx="50%" cy="50%" outerRadius={70} innerRadius={36} paddingAngle={3} strokeWidth={0}>
+                                      {topRooms.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                                    </Pie>
+                                    <Tooltip formatter={v => [`${v} kWh`, ""]} contentStyle={{ borderRadius: "10px", fontSize: "12px" }} />
+                                  </PieChart>
+                                </ResponsiveContainer>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "8px" }}>
+                                  {topRooms.map((r, i) => (
+                                    <div key={r.roomId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                        <div style={{ width: "10px", height: "10px", borderRadius: "2px", background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                                        <span style={{ fontSize: "12px", color: "#555" }}>{r.roomName}</span>
+                                      </div>
+                                      <span style={{ fontSize: "12px", fontWeight: "700", color: PIE_COLORS[i % PIE_COLORS.length] }}>{r.totalKwh} kWh</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+
+                
+                {energyTab === "rooms" && (() => {
+                  const rooms = [...(energyDaily?.byRoom || [])].sort((a,b) => b.totalKwh - a.totalKwh);
+                  const ROOM_COLORS = ["#5c35b0","#63a17f","#b8860b","#2a7ec8","#c03030","#e67e22","#1abc9c"];
+                  if (rooms.length === 0) return (
+                    <div style={{ ...card, textAlign: "center", padding: "60px", color: "#ccc", fontSize: "13px" }}>No room energy data for today.</div>
+                  );
+                  const maxKwh = Math.max(...rooms.map(r => r.totalKwh), 0.001);
+                  return (
+                    <div className="row g-3">
+                      <div className="col-md-7">
+                        <div style={card}>
+                          <h5 style={{ margin: "0 0 4px", fontWeight: "700", fontSize: "14px", color: "#1a1a1a" }}>Energy by Room — Today</h5>
+                          <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#aaa" }}>Total kWh consumed per room</p>
+                          <ResponsiveContainer width="100%" height={Math.max(200, rooms.length * 52)}>
+                            <BarChart data={rooms} layout="vertical" margin={{ top: 4, right: 16, left: 60, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e8eaf0" />
+                              <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#aaa" }} unit=" kWh" />
+                              <YAxis type="category" dataKey="roomName" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#555", fontWeight: "600" }} width={58} />
+                              <Tooltip contentStyle={{ borderRadius: "10px", fontSize: "13px" }} formatter={v => [`${v} kWh`, "Consumed"]} />
+                              <Bar dataKey="totalKwh" radius={[0, 6, 6, 0]} maxBarSize={28}>
+                                {rooms.map((_, i) => <Cell key={i} fill={ROOM_COLORS[i % ROOM_COLORS.length]} />)}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                      <div className="col-md-5">
+                        <div style={card}>
+                          <h5 style={{ margin: "0 0 16px", fontWeight: "700", fontSize: "14px", color: "#1a1a1a" }}>Room Breakdown</h5>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                            {rooms.map((r, i) => {
+                              const pct = ((r.totalKwh / maxKwh) * 100).toFixed(1);
+                              const color = ROOM_COLORS[i % ROOM_COLORS.length];
+                              return (
+                                <div key={r.roomId}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                                    <span style={{ fontSize: "13px", fontWeight: "600", color: "#333" }}>{r.roomName}</span>
+                                    <span style={{ fontSize: "13px", fontWeight: "700", color }}>{r.totalKwh} kWh</span>
+                                  </div>
+                                  <div style={{ height: "6px", borderRadius: "4px", background: "#f0eef8" }}>
+                                    <div style={{ height: "100%", width: `${pct}%`, borderRadius: "4px", background: color, transition: "width 0.6s ease" }} />
+                                  </div>
+                                  <div style={{ fontSize: "11px", color: "#aaa", marginTop: "2px" }}>{r.sessionCount} sessions · {Math.round(r.totalDurationSecs / 60)} min</div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {energyTab === "devices" && (() => {
+
+                  const liveRecords = energyLive?.records || [];
+                  const deviceMap = {};
+                  liveRecords.forEach(r => {
+                    const id   = r.device?._id || r.device?.id || r.recordId;
+                    const name = r.device?.name || "Unknown";
+                    const type = r.device?.type || "";
+                    if (!deviceMap[id]) deviceMap[id] = { name, type, watt: r.watt || 0, liveKwh: 0, sessions: 0 };
+                    deviceMap[id].liveKwh += r.liveKwh || 0;
+                    deviceMap[id].sessions += 1;
+                  });
+                  const deviceData = Object.values(deviceMap).sort((a,b) => b.watt - a.watt);
+
+                  const typeMap = {};
+                  devices.forEach(d => {
+                    const t = d.type || "OTHER";
+                    if (!typeMap[t]) typeMap[t] = { type: t, totalWatt: 0, count: 0 };
+                    typeMap[t].totalWatt += d.powerRatingWatt || 0;
+                    typeMap[t].count += 1;
+                  });
+                  const typeData = Object.values(typeMap);
+                  const TYPE_COLORS = { AC: "#2a7ec8", FAN: "#63a17f", LIGHT: GOLD, OTHER: "#aaa" };
+
+                  return (
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <div style={card}>
+                          <h5 style={{ margin: "0 0 4px", fontWeight: "700", fontSize: "14px", color: "#1a1a1a" }}>Live Sessions — Power Draw per Device</h5>
+                          <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#aaa" }}>{deviceData.length} active sessions right now</p>
+                          {deviceData.length === 0 ? (
+                            <div style={{ textAlign: "center", padding: "40px", color: "#ccc", fontSize: "13px" }}>No live sessions currently running.</div>
+                          ) : (
+                            <ResponsiveContainer width="100%" height={Math.max(200, deviceData.length * 48)}>
+                              <BarChart data={deviceData} layout="vertical" margin={{ top: 4, right: 16, left: 80, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e8eaf0" />
+                                <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#aaa" }} unit="W" />
+                                <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#555" }} width={76} />
+                                <Tooltip contentStyle={{ borderRadius: "10px", fontSize: "13px" }} formatter={(v, n) => [`${v} ${n === "watt" ? "W" : "kWh"}`, n]} />
+                                <Bar dataKey="watt" name="watt" fill={ACCENT} radius={[0, 6, 6, 0]} maxBarSize={22} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="col-md-6">
+                        <div style={{ ...card, marginBottom: "14px" }}>
+                          <h5 style={{ margin: "0 0 4px", fontWeight: "700", fontSize: "14px", color: "#1a1a1a" }}>Power Rating by Device Type</h5>
+                          <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#aaa" }}>Total installed wattage per category</p>
+                          {typeData.length === 0 ? (
+                            <div style={{ textAlign: "center", padding: "30px", color: "#ccc", fontSize: "13px" }}>No devices found.</div>
+                          ) : (
+                            <ResponsiveContainer width="100%" height={200}>
+                              <BarChart data={typeData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e8eaf0" />
+                                <XAxis dataKey="type" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#555", fontWeight: "600" }} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#aaa" }} unit="W" />
+                                <Tooltip contentStyle={{ borderRadius: "10px", fontSize: "13px" }} formatter={v => [`${v} W`, "Total Wattage"]} />
+                                <Bar dataKey="totalWatt" radius={[6, 6, 0, 0]} maxBarSize={48}>
+                                  {typeData.map((d, i) => <Cell key={i} fill={TYPE_COLORS[d.type] || "#aaa"} />)}
+                                </Bar>
+                              </BarChart>
+                            </ResponsiveContainer>
+                          )}
+                        </div>
+
+                        <div style={card}>
+                          <h5 style={{ margin: "0 0 12px", fontWeight: "700", fontSize: "14px", color: "#1a1a1a" }}>Device Summary</h5>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                            {devices.slice(0, 6).map(d => (
+                              <div key={d._id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", borderRadius: "8px", background: d.status === "ON" ? "#e8f5ee" : "#fafafa", border: `1px solid ${d.status === "ON" ? "#c2e0cf" : "#f0eef8"}` }}>
+                                <div>
+                                  <span style={{ fontSize: "13px", fontWeight: "600", color: "#1a1a1a" }}>{d.name}</span>
+                                  <span style={{ fontSize: "11px", color: "#aaa", marginLeft: "6px" }}>{d.type}</span>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                  <span style={{ fontSize: "12px", color: "#777" }}>{d.powerRatingWatt}W</span>
+                                  <span style={{ padding: "2px 8px", borderRadius: "10px", fontSize: "11px", fontWeight: "700", background: `${STATE_COLORS[d.status]}18`, color: STATE_COLORS[d.status] }}>{d.status}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {energyTab === "weekly" && (() => {
+                  const byDay = energyWeekly?.byDay || [];
+                  const maxDay = byDay.reduce((m, d) => d.totalKwh > m.kwh ? { kwh: d.totalKwh, date: d.date } : m, { kwh: 0, date: "" });
+                  const totalWeek = energyWeekly?.totalKwh ?? 0;
+                  const avgDay = byDay.length ? (totalWeek / byDay.length).toFixed(4) : 0;
+                  return (
+                    <>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "14px", marginBottom: "20px" }}>
+                        {[
+                          { label: "Week Total", value: `${totalWeek} kWh`, color: ACCENT, icon: "📅" },
+                          { label: "Daily Average", value: `${avgDay} kWh`,   color: GREEN,  icon: "📊" },
+                          { label: "Peak Day", value: maxDay.date?.slice(5) || "—", color: "#c03030", icon: "🔺" },
+                        ].map(k => (
+                          <div key={k.label} style={{ ...card, padding: "20px" }}>
+                            <div style={{ fontSize: "24px", marginBottom: "4px" }}>{k.icon}</div>
+                            <div style={{ fontSize: "24px", fontWeight: "800", color: k.color, lineHeight: 1 }}>{k.value}</div>
+                            <div style={{ fontSize: "12px", color: "#777", marginTop: "4px", fontWeight: "600" }}>{k.label}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div style={card}>
+                        <h5 style={{ margin: "0 0 4px", fontWeight: "700", fontSize: "14px", color: "#1a1a1a" }}>Daily Breakdown — This Week</h5>
+                        <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#aaa" }}>
+                          {energyWeekly?.weekStart} → {energyWeekly?.weekEnd}
+                        </p>
+                        {byDay.length === 0 ? (
+                          <div style={{ textAlign: "center", padding: "40px", color: "#ccc", fontSize: "13px" }}>No weekly data yet.</div>
+                        ) : (
+                          <ResponsiveContainer width="100%" height={280}>
+                            <BarChart data={byDay.map(d => ({ date: d.date?.slice(5), kwh: d.totalKwh }))} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
+                              <defs>
+                                <linearGradient id="weekBar" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%"   stopColor={ACCENT} stopOpacity={1} />
+                                  <stop offset="100%" stopColor={ACCENT} stopOpacity={0.5} />
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e8eaf0" />
+                              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#555", fontWeight: "600" }} />
+                              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#aaa" }} unit=" kWh" />
+                              <Tooltip contentStyle={{ borderRadius: "10px", border: "1px solid #e0dcea", fontSize: "13px" }} formatter={v => [`${v} kWh`, "Consumed"]} />
+                              <Bar dataKey="kwh" fill="url(#weekBar)" radius={[6, 6, 0, 0]} maxBarSize={52} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
+
+                {energyTab === "live" && (() => {
+                  const records = energyLive?.records || [];
+                  const totalWatt = records.reduce((s, r) => s + (r.watt || 0), 0);
+                  const totalLiveKwh = records.reduce((s, r) => s + (r.liveKwh || 0), 0).toFixed(4);
+                  return (
+                    <>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "14px", marginBottom: "20px" }}>
+                        {[
+                          { label: "Active Sessions", value: records.length,          color: GREEN,     icon: "🟢" },
+                          { label: "Total Draw",      value: `${totalWatt} W`,        color: ACCENT,    icon: "⚡" },
+                          { label: "Est. kWh So Far", value: `${totalLiveKwh} kWh`,  color: GOLD,      icon: "🔋" },
+                        ].map(k => (
+                          <div key={k.label} style={{ ...card, padding: "20px" }}>
+                            <div style={{ fontSize: "24px", marginBottom: "4px" }}>{k.icon}</div>
+                            <div style={{ fontSize: "24px", fontWeight: "800", color: k.color, lineHeight: 1 }}>{k.value}</div>
+                            <div style={{ fontSize: "12px", color: "#777", marginTop: "4px", fontWeight: "600" }}>{k.label}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {records.length === 0 ? (
+                        <div style={{ ...card, textAlign: "center", padding: "60px", color: "#ccc", fontSize: "13px" }}>
+                          No live sessions right now. Turn on some devices!
+                        </div>
+                      ) : (
+                        <div className="row g-3">
+                          <div className="col-md-6">
+                            <div style={card}>
+                              <h5 style={{ margin: "0 0 4px", fontWeight: "700", fontSize: "14px", color: "#1a1a1a" }}>Live kWh by Session</h5>
+                              <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#aaa" }}>Estimated energy consumed since session start</p>
+                              <ResponsiveContainer width="100%" height={Math.max(180, records.length * 44)}>
+                                <BarChart data={records.map(r => ({ name: r.device?.name || "Device", kwh: parseFloat(r.liveKwh?.toFixed(4) || 0), watt: r.watt }))} layout="vertical" margin={{ top: 4, right: 16, left: 70, bottom: 0 }}>
+                                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e8eaf0" />
+                                  <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#aaa" }} unit=" kWh" />
+                                  <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#555" }} width={68} />
+                                  <Tooltip contentStyle={{ borderRadius: "10px", fontSize: "13px" }} formatter={(v, n) => [`${v} ${n === "kwh" ? "kWh" : "W"}`, n.toUpperCase()]} />
+                                  <Bar dataKey="kwh" fill={GREEN} radius={[0, 6, 6, 0]} maxBarSize={22} />
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </div>
+
+                          <div className="col-md-6">
+                            <div style={card}>
+                              <h5 style={{ margin: "0 0 12px", fontWeight: "700", fontSize: "14px", color: "#1a1a1a" }}>Session Details</h5>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                                {records.map((r, i) => {
+                                  const elapsed = r.elapsedSeconds || 0;
+                                  const mins  = Math.floor(elapsed / 60);
+                                  const secs  = elapsed % 60;
+                                  return (
+                                    <div key={r.recordId || i} style={{ padding: "12px 14px", borderRadius: "10px", background: "#f0faf4", border: "1px solid #c2e0cf" }}>
+                                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                                        <div>
+                                          <span style={{ fontSize: "13px", fontWeight: "700", color: "#1a1a1a" }}>{r.device?.name || "Unknown"}</span>
+                                          <span style={{ fontSize: "11px", color: "#aaa", marginLeft: "6px" }}>{r.device?.type} · {r.room?.name}</span>
+                                        </div>
+                                        <span style={{ fontSize: "13px", fontWeight: "700", color: GREEN }}>{r.watt}W</span>
+                                      </div>
+                                      <div style={{ display: "flex", gap: "16px", marginTop: "6px" }}>
+                                        <span style={{ fontSize: "11px", color: "#777" }}>⏱ {mins}m {secs}s elapsed</span>
+                                        <span style={{ fontSize: "11px", color: GOLD, fontWeight: "600" }}>~{r.liveKwh?.toFixed(4)} kWh used</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+
+              </div>
+            )}
+
+
+            <SectionHeader
+              title="Simulation Engine"
+              subtitle={`5 scenario simulations · Inputs: ${filteredEventsByDevice.length} events, ${devices.length} devices, lambda=${lambda}, avgPower=${avgPower.toFixed(0)}W — all from your home`}
+              icon={Play} color="#2a7ec8"
+            />
+
+            <div className="row g-3">
+              <div className="col-md-4">
+                <div style={card}>
+                  <h5 style={{ margin: "0 0 16px", fontWeight: "700", fontSize: "15px", color: "#1a1a1a" }}>Simulation Inputs (your home)</h5>
+                  <div style={{ padding: "12px 14px", background: "#f0faf4", borderRadius: "10px", border: "1px solid #c2e0cf", marginBottom: "16px" }}>
+                    {[
+                      ["Total Events", filteredEventsByDevice.length],
+                      ["Total Devices", devices.length],
+                      ["Time Span", `${spanHours.toFixed(1)}h`],
+                      ["Avg Power", `${avgPower.toFixed(0)}W`],
+                      ["λ (events/h)", lambda],
+                    ].map(([label, value]) => (
+                      <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "4px" }}>
+                        <span style={{ color: "#555" }}>{label}</span>
+                        <strong style={{ color: GREEN }}>{value}</strong>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ marginBottom: "16px" }}>
+                    <p style={{ margin: "0 0 6px", fontSize: "13px", fontWeight: "600", color: "#444" }}>Scenario</p>
+                    <select style={inputStyle} value={simMode} onChange={e => setSimMode(e.target.value)}>
+                      {SimulationScenarioFactory.getAllScenarioTypes().map(scenario => (
+                        <option key={scenario.id} value={scenario.id}>{scenario.icon} {scenario.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button onClick={handleRunSim} disabled={simRunning}
+                    style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "11px", borderRadius: "10px", border: "none", background: simRunning ? "#e0dcea" : `linear-gradient(135deg,${GREEN},#2e8b57)`, color: "white", fontSize: "14px", fontWeight: "700", cursor: simRunning ? "not-allowed" : "pointer" }}>
+                    {simRunning ? <><RotateCcw size={15} style={{ animation: "spin 1s linear infinite" }} /> Running...</> : <><Play size={15} /> Run Simulation</>}
+                  </button>
+                </div>
+              </div>
+
+              <div className="col-md-8">
+                {simResults.length === 0 ? (
+                  <div style={{ ...card, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "260px", color: "#aaa" }}>
+                    <Play size={40} color="#e0dcea" strokeWidth={1.5} />
+                    <p style={{ margin: "12px 0 4px", fontWeight: "600", fontSize: "15px" }}>No simulations run yet</p>
+                    <p style={{ margin: 0, fontSize: "13px" }}>Outputs will be computed from your {events.length} real events + {devices.length} devices</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="row g-3" style={{ marginBottom: "16px" }}>
+                      {[
+                        { label: "Avg Response Time", value: `${simResults[0].avgResponseTime} ms`, color: ACCENT },
+                        { label: "Device Utilization", value: `${(simResults[0].utilization * 100).toFixed(1)}%`, color: GREEN },
+                        { label: "Energy Consumed", value: `${simResults[0].energyKwh} kWh`, color: GOLD },
+                        { label: "System Stability", value: `${simResults[0].stability}%`, color: parseFloat(simResults[0].stability) > 70 ? GREEN : "#c03030" },
+                      ].map((stat, i) => (
+                        <div key={i} className="col-6">
+                          <div style={{ ...card, padding: "16px 18px" }}>
+                            <p style={{ margin: "0 0 4px", fontSize: "11px", fontWeight: "600", color: "#888", textTransform: "uppercase", letterSpacing: "0.05em" }}>{stat.label}</p>
+                            <p style={{ margin: "0 0 2px", fontSize: "24px", fontWeight: "800", color: stat.color, lineHeight: 1 }}>{stat.value}</p>
+                            <p style={{ margin: 0, fontSize: "11px", color: "#aaa" }}>{simResults[0].label} · lambda={simResults[0].lambda}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {comparisonData && (
+                      <div style={{ ...card, marginBottom: "16px" }}>
+                        <h5 style={{ margin: "0 0 4px", fontWeight: "700", fontSize: "15px", color: "#1a1a1a" }}>Scenario Comparison</h5>
+                        <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#aaa" }}>Last {comparisonData.length} simulations</p>
+                        <ResponsiveContainer width="100%" height={200}>
+                          <BarChart data={comparisonData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e8eaf0" />
+                            <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#888" }} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#aaa" }} />
+                            <Tooltip contentStyle={{ borderRadius: "10px", border: "1px solid #e0dcea", fontSize: "13px" }} />
+                            <Legend iconType="square" wrapperStyle={{ fontSize: "12px" }} />
+                            <Bar dataKey="responseTime" name="Response (ms)" fill={ACCENT} radius={[4, 4, 0, 0]} maxBarSize={32} />
+                            <Bar dataKey="stability" name="Stability (%)" fill={GREEN} radius={[4, 4, 0, 0]} maxBarSize={32} />
+                            <Bar dataKey="utilization" name="Utilization (%)" fill={GOLD} radius={[4, 4, 0, 0]} maxBarSize={32} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+
+                    <div style={{ ...card, padding: "16px 20px" }}>
+                      <h5 style={{ margin: "0 0 12px", fontWeight: "700", fontSize: "14px", color: "#1a1a1a" }}>Run History</h5>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        {simResults.map((r, i) => (
+                          <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: i === 0 ? "#f0faf4" : "#fafafa", borderRadius: "8px", border: `1px solid ${i === 0 ? "#c2e0cf" : "#f0eef8"}` }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <CheckCircle size={14} color={i === 0 ? GREEN : "#aaa"} />
+                              <span style={{ fontSize: "13px", fontWeight: "600", color: "#1a1a1a" }}>{r.label}</span>
+                            </div>
+                            <div style={{ display: "flex", gap: "12px" }}>
+                              <span style={{ fontSize: "12px", color: "#777" }}>{r.avgResponseTime}ms</span>
+                              <span style={{ fontSize: "12px", color: "#777" }}>{r.energyKwh} kWh</span>
+                              <span style={{ fontSize: "12px", color: "#777" }}>lambda={r.lambda}</span>
+                              <span style={{ fontSize: "12px", fontWeight: "700", color: parseFloat(r.stability) > 70 ? GREEN : "#c03030" }}>{r.stability}% stable</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+      <style>{`
+        h5 { font-size: 1rem; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      `}</style>
+    </Layout>
+  );
+}
+
+
+
+{/* <SectionHeader
               title="Poisson Event Modeling"
               subtitle={`Analyzing ${events.length} real events from your home · Computed λ = ${lambda} events/hour · Filter by device to see individual rates`}
               icon={Activity} color={GREEN}
@@ -916,122 +1468,4 @@ export default function ModelingSimulation() {
                   </div>
                 </div>
               ))}
-            </div>
-
-            <SectionHeader
-              title="Simulation Engine"
-              subtitle={`5 scenario simulations · Inputs: ${filteredEventsByDevice.length} events, ${devices.length} devices, lambda=${lambda}, avgPower=${avgPower.toFixed(0)}W — all from your home`}
-              icon={Play} color="#2a7ec8"
-            />
-
-            <div className="row g-3">
-              <div className="col-md-4">
-                <div style={card}>
-                  <h5 style={{ margin: "0 0 16px", fontWeight: "700", fontSize: "15px", color: "#1a1a1a" }}>Simulation Inputs (your home)</h5>
-                  <div style={{ padding: "12px 14px", background: "#f0faf4", borderRadius: "10px", border: "1px solid #c2e0cf", marginBottom: "16px" }}>
-                    {[
-                      ["Total Events", filteredEventsByDevice.length],
-                      ["Total Devices", devices.length],
-                      ["Time Span", `${spanHours.toFixed(1)}h`],
-                      ["Avg Power", `${avgPower.toFixed(0)}W`],
-                      ["λ (events/h)", lambda],
-                    ].map(([label, value]) => (
-                      <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "4px" }}>
-                        <span style={{ color: "#555" }}>{label}</span>
-                        <strong style={{ color: GREEN }}>{value}</strong>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ marginBottom: "16px" }}>
-                    <p style={{ margin: "0 0 6px", fontSize: "13px", fontWeight: "600", color: "#444" }}>Scenario</p>
-                    <select style={inputStyle} value={simMode} onChange={e => setSimMode(e.target.value)}>
-                      {SimulationScenarioFactory.getAllScenarioTypes().map(scenario => (
-                        <option key={scenario.id} value={scenario.id}>{scenario.icon} {scenario.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <button onClick={handleRunSim} disabled={simRunning}
-                    style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "11px", borderRadius: "10px", border: "none", background: simRunning ? "#e0dcea" : `linear-gradient(135deg,${GREEN},#2e8b57)`, color: "white", fontSize: "14px", fontWeight: "700", cursor: simRunning ? "not-allowed" : "pointer" }}>
-                    {simRunning ? <><RotateCcw size={15} style={{ animation: "spin 1s linear infinite" }} /> Running...</> : <><Play size={15} /> Run Simulation</>}
-                  </button>
-                </div>
-              </div>
-
-              <div className="col-md-8">
-                {simResults.length === 0 ? (
-                  <div style={{ ...card, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "260px", color: "#aaa" }}>
-                    <Play size={40} color="#e0dcea" strokeWidth={1.5} />
-                    <p style={{ margin: "12px 0 4px", fontWeight: "600", fontSize: "15px" }}>No simulations run yet</p>
-                    <p style={{ margin: 0, fontSize: "13px" }}>Outputs will be computed from your {events.length} real events + {devices.length} devices</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="row g-3" style={{ marginBottom: "16px" }}>
-                      {[
-                        { label: "Avg Response Time", value: `${simResults[0].avgResponseTime} ms`, color: ACCENT },
-                        { label: "Device Utilization", value: `${(simResults[0].utilization * 100).toFixed(1)}%`, color: GREEN },
-                        { label: "Energy Consumed", value: `${simResults[0].energyKwh} kWh`, color: GOLD },
-                        { label: "System Stability", value: `${simResults[0].stability}%`, color: parseFloat(simResults[0].stability) > 70 ? GREEN : "#c03030" },
-                      ].map((stat, i) => (
-                        <div key={i} className="col-6">
-                          <div style={{ ...card, padding: "16px 18px" }}>
-                            <p style={{ margin: "0 0 4px", fontSize: "11px", fontWeight: "600", color: "#888", textTransform: "uppercase", letterSpacing: "0.05em" }}>{stat.label}</p>
-                            <p style={{ margin: "0 0 2px", fontSize: "24px", fontWeight: "800", color: stat.color, lineHeight: 1 }}>{stat.value}</p>
-                            <p style={{ margin: 0, fontSize: "11px", color: "#aaa" }}>{simResults[0].label} · lambda={simResults[0].lambda}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {comparisonData && (
-                      <div style={{ ...card, marginBottom: "16px" }}>
-                        <h5 style={{ margin: "0 0 4px", fontWeight: "700", fontSize: "15px", color: "#1a1a1a" }}>Scenario Comparison</h5>
-                        <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#aaa" }}>Last {comparisonData.length} simulations</p>
-                        <ResponsiveContainer width="100%" height={200}>
-                          <BarChart data={comparisonData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e8eaf0" />
-                            <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#888" }} />
-                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#aaa" }} />
-                            <Tooltip contentStyle={{ borderRadius: "10px", border: "1px solid #e0dcea", fontSize: "13px" }} />
-                            <Legend iconType="square" wrapperStyle={{ fontSize: "12px" }} />
-                            <Bar dataKey="responseTime" name="Response (ms)" fill={ACCENT} radius={[4, 4, 0, 0]} maxBarSize={32} />
-                            <Bar dataKey="stability" name="Stability (%)" fill={GREEN} radius={[4, 4, 0, 0]} maxBarSize={32} />
-                            <Bar dataKey="utilization" name="Utilization (%)" fill={GOLD} radius={[4, 4, 0, 0]} maxBarSize={32} />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
-                    )}
-
-                    <div style={{ ...card, padding: "16px 20px" }}>
-                      <h5 style={{ margin: "0 0 12px", fontWeight: "700", fontSize: "14px", color: "#1a1a1a" }}>Run History</h5>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                        {simResults.map((r, i) => (
-                          <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: i === 0 ? "#f0faf4" : "#fafafa", borderRadius: "8px", border: `1px solid ${i === 0 ? "#c2e0cf" : "#f0eef8"}` }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                              <CheckCircle size={14} color={i === 0 ? GREEN : "#aaa"} />
-                              <span style={{ fontSize: "13px", fontWeight: "600", color: "#1a1a1a" }}>{r.label}</span>
-                            </div>
-                            <div style={{ display: "flex", gap: "12px" }}>
-                              <span style={{ fontSize: "12px", color: "#777" }}>{r.avgResponseTime}ms</span>
-                              <span style={{ fontSize: "12px", color: "#777" }}>{r.energyKwh} kWh</span>
-                              <span style={{ fontSize: "12px", color: "#777" }}>lambda={r.lambda}</span>
-                              <span style={{ fontSize: "12px", fontWeight: "700", color: parseFloat(r.stability) > 70 ? GREEN : "#c03030" }}>{r.stability}% stable</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-      <style>{`
-        h5 { font-size: 1rem; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-      `}</style>
-    </Layout>
-  );
-}
+            </div> */}

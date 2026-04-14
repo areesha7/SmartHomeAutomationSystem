@@ -99,6 +99,9 @@ const TriggerStrategyFactory = {
 //  FACTORY PATTERN 
 // Single place responsible for building automation objects — both from scratch
 // and from backend data. If the API shape changes, only this class needs updating.
+// One central conversion point, setAutomations(...) Not messy parsing logic, If API changes: ONLY update factory
+// API gives raw data -> Factory converts it -> UI gets clean object
+
 
 class AutomationFactory {
 

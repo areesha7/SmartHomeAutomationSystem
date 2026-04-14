@@ -114,7 +114,7 @@ const Layout = ({ children }) => {
               <Link to="/profile" className="nav-link text-white custom-nav-link">Profile</Link>
             </li>
             <li className="nav-item mb-2">
-  <Link to="/modeling" className="nav-link text-white custom-nav-link">Modeling</Link>
+  <Link to="/modeling" className="nav-link text-white custom-nav-link">Energy Consumption </Link>
 </li>
 
           </ul>
