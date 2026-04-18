@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaCamera, FaEye, FaEyeSlash } from "react-icons/fa";
@@ -7,6 +6,9 @@ import Layout from "../Components/Layout";
 import { useAuth } from "../context/AuthContext";
 
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+// ─── Get your FREE API key at https://api.imgbb.com/ (takes 30 seconds) ──────
+const IMGBB_API_KEY = import.meta.env.VITE_IMGBB_API_KEY || "YOUR_IMGBB_API_KEY";
 
 const apiFetch = async (path, token, options = {}) => {
   const storedToken = token || localStorage.getItem("token") || null;
@@ -98,48 +100,28 @@ const initialData = {
 };
 
 /* 
-   IMAGE COMPRESSION HELPER
+   UPLOAD IMAGE TO IMGBB — returns a public URL
+   Sign up free at https://api.imgbb.com/ to get your API key,
+   then add VITE_IMGBB_API_KEY=your_key to your .env file.
 */
+const uploadToImgBB = async (file) => {
+  const formData = new FormData();
+  formData.append("image", file);
 
-const compressImage = (file) => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (e) => {
-      const img = new Image();
-      img.src = e.target.result;
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        
-        const MAX_WIDTH = 150;
-        const MAX_HEIGHT = 150;
-        
-        if (width > height) {
-          if (width > MAX_WIDTH) {
-            height = (height * MAX_WIDTH) / width;
-            width = MAX_WIDTH;
-          }
-        } else {
-          if (height > MAX_HEIGHT) {
-            width = (width * MAX_HEIGHT) / height;
-            height = MAX_HEIGHT;
-          }
-        }
-        
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-        
-        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.5);
-        resolve(compressedBase64);
-      };
-      img.onerror = reject;
-    };
-    reader.onerror = reject;
-  });
+  const res = await fetch(
+    `https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`,
+    { method: "POST", body: formData }
+  );
+
+  const result = await res.json();
+
+  if (!res.ok || !result?.data?.url) {
+    throw new Error(result?.error?.message || "ImgBB upload failed");
+  }
+
+  // result.data.url       — direct image URL (what we save)
+  // result.data.display_url — same but always https
+  return result.data.display_url || result.data.url;
 };
 
 /* 
@@ -200,21 +182,17 @@ const Profile = () => {
           manager.updateField("profile", "name", u.name || "");
           manager.updateField("profile", "email", u.email || "");
           setUserRole(u.role || "");
-          
-          // Load saved avatar from backend
+
+          const storageKey = getAvatarStorageKey();
+
           if (u.avatar) {
+            // Backend has a valid avatar URL — use it and cache it
             manager.setProfileImage(u.avatar);
-            // Store in user-specific localStorage
-            const storageKey = getAvatarStorageKey();
-            if (storageKey) {
-              localStorage.setItem(storageKey, u.avatar);
-            }
-          } else {
-            // Check user-specific localStorage for avatar
-            const storageKey = getAvatarStorageKey();
-            if (storageKey && localStorage.getItem(storageKey)) {
-              manager.setProfileImage(localStorage.getItem(storageKey));
-            }
+            if (storageKey) localStorage.setItem(storageKey, u.avatar);
+          } else if (storageKey) {
+            // Backend has no avatar — keep whatever is cached locally, don't wipe it
+            const cached = localStorage.getItem(storageKey);
+            if (cached) manager.setProfileImage(cached);
           }
         }
       } catch (err) {
@@ -311,58 +289,39 @@ const Profile = () => {
     showToastMsg("Settings saved successfully!");
   };
 
-  // ── Handle image upload with compression ─────────────────────────────────
+  // ── Handle image upload ───────────────────────────────────────────────────
   const handleImageChange = async (e) => {
     if (!e.target.files || !e.target.files[0]) return;
     const file = e.target.files[0];
-    
-    if (file.size > 1024 * 1024) { // 1MB
-      showToastMsg("Image too large. Please select an image under 1MB.", true);
+
+    if (file.size > 5 * 1024 * 1024) { // 5MB
+      showToastMsg("Image too large. Please select an image under 5MB.", true);
       return;
     }
-    
+
     setIsUploading(true);
-    showToastMsg("Compressing image...", false);
-    
+    showToastMsg("Uploading image...", false);
+
     try {
-      // Compress the image
-      const compressedBase64 = await compressImage(file);
-      
-      
-      manager.setProfileImage(compressedBase64);
-      
+      // Step 1: Upload to ImgBB — get back a public URL
+      const imageUrl = await uploadToImgBB(file);
+
+      // Step 2: Save that URL to your backend (passes the "valid URL" validation)
+      await apiFetch("/users/me", token, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatar: imageUrl }),
+      });
+
+      // Step 3: Update local UI + localStorage cache
+      manager.setProfileImage(imageUrl);
       const storageKey = getAvatarStorageKey();
-      if (storageKey) {
-        localStorage.setItem(storageKey, compressedBase64);
-      }
-      
-      try {
-        const response = await fetch(`${BASE_URL}/users/me`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ avatar: compressedBase64 }),
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) {
-          throw new Error(data?.message || `Upload failed: ${response.status}`);
-        }
-        
-        showToastMsg("Profile picture updated!");
-        
-      } catch (uploadErr) {
-        
-        console.warn("Backend upload failed, but image saved locally:", uploadErr);
-        showToastMsg("Image saved locally. Will sync when connection improves.", false);
-      }
-      
+      if (storageKey) localStorage.setItem(storageKey, imageUrl);
+
+      showToastMsg("Profile picture updated!");
     } catch (err) {
-      console.error("Compression error:", err);
-      showToastMsg("Failed to process image. Please try a different image.", true);
+      console.error("Avatar upload error:", err);
+      showToastMsg(err.message || "Failed to upload image. Please try again.", true);
     } finally {
       setIsUploading(false);
     }
@@ -403,14 +362,26 @@ const Profile = () => {
                   data.profile.name ? data.profile.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) : "AJ"
                 )}
               </div>
-              <label htmlFor="profile-upload" style={{ position: "absolute", bottom: -5, right: -5, background: primaryColor, color: "#fff", borderRadius: "50%", padding: "5px", cursor: "pointer", fontSize: "12px", display: "flex", alignItems: "center", justifyContent: "center", opacity: isUploading ? 0.5 : 1 }}>
+              <label
+                htmlFor="profile-upload"
+                style={{
+                  position: "absolute", bottom: -5, right: -5,
+                  background: isUploading ? "#aaa" : primaryColor,
+                  color: "#fff", borderRadius: "50%", padding: "5px",
+                  cursor: isUploading ? "not-allowed" : "pointer",
+                  fontSize: "12px", display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
                 <FaCamera />
               </label>
-              <input id="profile-upload" type="file" accept="image/jpeg,image/png,image/jpg" onChange={handleImageChange} disabled={isUploading} style={{ display: "none" }} />
+              <input id="profile-upload" type="file" accept="image/jpeg,image/png,image/jpg,image/webp" onChange={handleImageChange} disabled={isUploading} style={{ display: "none" }} />
             </div>
             <div>
               <h2 style={{ margin: 0, fontSize: "22px", color: colors.black }}>{data.profile.name || defaultProfile.name}</h2>
               <div style={{ fontSize: "14px", color: primaryColor }}>{data.profile.email || defaultProfile.email}</div>
+              {isUploading && (
+                <div style={{ fontSize: "12px", color: colors.gray, marginTop: "4px" }}>Uploading...</div>
+              )}
             </div>
           </div>
 
