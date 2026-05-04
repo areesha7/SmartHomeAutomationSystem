@@ -66,7 +66,7 @@ export default function Login() {
       login(user, tokens.accessToken);
 
       if (redirectUrl) {
-        window.location.href = redirectUrl;
+        navigate(decodeURIComponent(redirectUrl));  // ✅ use navigate + decode
       } else {
         navigate("/");
       }
@@ -97,7 +97,7 @@ export default function Login() {
       login(user, tokens.accessToken);
 
       if (redirectUrl) {
-        window.location.href = redirectUrl;
+        navigate(decodeURIComponent(redirectUrl));  // ✅ use navigate + decode
       } else {
         navigate("/");
       }

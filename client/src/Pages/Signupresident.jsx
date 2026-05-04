@@ -8,17 +8,17 @@ import { useAuth } from "../context/AuthContext";
 const API_URL = import.meta.env.VITE_API_URL;
 
 export default function SignupResident() {
-  const navigate       = useNavigate();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { login }      = useAuth();
-  const inviteToken    = searchParams.get("token");
+  const { login } = useAuth();
+  const inviteToken = searchParams.get("token");
   const [accepting, setAccepting] = useState(false);
 
-  const [name,     setName]     = useState("");
-  const [email,    setEmail]    = useState("");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error,    setError]    = useState("");
-  const [loading,  setLoading]  = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   // Store token in session storage if not already there
   useEffect(() => {
@@ -36,14 +36,14 @@ export default function SignupResident() {
     const response = await axios.post(
       `${API_URL}/homes/accept-invitation`,
       { token: pendingToken },
-      { 
-        headers: { 
+      {
+        headers: {
           Authorization: `Bearer ${authToken}`,
           'Content-Type': 'application/json'
-        } 
+        }
       }
     );
-    
+
     return response.data;
   };
 
@@ -56,7 +56,7 @@ export default function SignupResident() {
       setError("Password must be at least 6 characters long.");
       return;
     }
-    
+
     const pendingToken = sessionStorage.getItem("pendingInvitationToken");
     if (!pendingToken) {
       setError("No invitation token found. Please use the link from your invitation email.");
@@ -81,15 +81,15 @@ export default function SignupResident() {
       // Now accept the invitation
       setAccepting(true);
       const acceptResult = await acceptInvitation(tokens.accessToken);
-      
+
       const homeData = acceptResult?.data?.home || acceptResult?.home;
-      
+
       // Clear the pending token
       sessionStorage.removeItem("pendingInvitationToken");
-      
+
       // Redirect to dashboard
-      navigate("/dashboard");
-      
+      navigate("/");
+
     } catch (err) {
       console.error("Signup error:", err);
       const message = err.response?.data?.message || "Signup failed. Please try again.";
@@ -135,24 +135,24 @@ export default function SignupResident() {
             <p style={{ fontSize: "13px", color: "#666", marginBottom: "16px" }}>
               Create your account to accept the invitation and join your home.
             </p>
-            
+
             {error && (
               <p style={{ color: "red", fontSize: "13px", marginBottom: "10px" }}>{error}</p>
             )}
-            
+
             {accepting && (
               <p style={{ color: "#2e8b57", fontSize: "13px", marginBottom: "10px" }}>
                 Account created! Accepting invitation...
               </p>
             )}
-            
+
             <input
               placeholder="Full Name"
               value={name}
               onChange={e => setName(e.target.value)}
               disabled={loading || accepting}
             />
-            
+
             <input
               type="email"
               placeholder="Email (must match your invitation)"
@@ -160,7 +160,7 @@ export default function SignupResident() {
               onChange={e => setEmail(e.target.value)}
               disabled={loading || accepting}
             />
-            
+
             <input
               type="password"
               placeholder="Password (min 6 characters)"
@@ -168,7 +168,7 @@ export default function SignupResident() {
               onChange={e => setPassword(e.target.value)}
               disabled={loading || accepting}
             />
-            
+
             <button
               className="button-primary"
               onClick={handleSignup}
@@ -176,10 +176,10 @@ export default function SignupResident() {
             >
               {loading ? "Creating account..." : accepting ? "Joining home..." : "Create Account & Join Home"}
             </button>
-            
+
             <div className="form-links">
               Already have an account?{" "}
-              <Link to={`/login?redirect=${encodeURIComponent(`/accept-invitation?token=${inviteToken}`)}`}>
+              <Link to={`/login?redirect=${encodeURIComponent(`/accept-invitation?token=${inviteToken || sessionStorage.getItem("pendingInvitationToken")}`)}`}>
                 Login
               </Link>
             </div>
