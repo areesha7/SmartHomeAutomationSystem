@@ -1,21 +1,24 @@
 
 import React, { useState, useEffect } from "react";
+import { useRef } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_URL = import.meta.env.VITE_API_URL;
 
 export default function AcceptInvitation() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
   const navigate = useNavigate();
-  const { token: authToken, user, isAuthenticated } = useAuth();
+  const { token: authToken, user, isAuthenticated ,logout} = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [homeInfo, setHomeInfo] = useState(null);
   const [accepting, setAccepting] = useState(false);
+  const hasProcessed = useRef(false);
+
 
   //  token storage
   useEffect(() => {
@@ -33,47 +36,50 @@ export default function AcceptInvitation() {
     const response = await axios.post(
       `${API_URL}/homes/accept-invitation`,
       { token: pendingToken },
-      { 
-        headers: { 
+      {
+        headers: {
           Authorization: `Bearer ${authToken}`,
           'Content-Type': 'application/json'
-        } 
+        }
       }
     );
-    
+
     return response.data;
   };
 
   useEffect(() => {
     const processInvitation = async () => {
+      if (hasProcessed.current) return;  //  prevents retries
       const pendingToken = sessionStorage.getItem("pendingInvitationToken");
-      
+
       if (!pendingToken) {
         navigate("/");
         return;
       }
 
-      if (isAuthenticated && authToken && !accepting) {
+      if (isAuthenticated && authToken) {
+        if (hasProcessed.current) return;  // ✅ stops re-runs
+        hasProcessed.current = true;
         setAccepting(true);
         try {
           console.log("Processing pending invitation for user:", user?.email);
           const response = await acceptInvitation(authToken);
-          
+
           const homeData = response?.data?.home || response?.home;
           setHomeInfo(homeData);
           setSuccess(true);
-          
+
           sessionStorage.removeItem("pendingInvitationToken");
-          
+
           setTimeout(() => {
             navigate("/");
           }, 3000);
-          
+
         } catch (err) {
           console.error("Error accepting invitation:", err);
-          
+
           let errorMessage = "Failed to accept invitation. ";
-          
+
           if (err.response?.status === 403) {
             errorMessage = `This invitation was sent to a different email address.\n\nYou are logged in as: ${user?.email}\n\nPlease log out and log in with the email address where you received this invitation.`;
           } else if (err.response?.status === 404) {
@@ -86,19 +92,18 @@ export default function AcceptInvitation() {
           } else {
             errorMessage += err.response?.data?.message || "Please try again.";
           }
-          
+
           setError(errorMessage);
         } finally {
           setLoading(false);
-          setAccepting(false);
         }
-      } else if (!isAuthenticated && !accepting) {
+      } else if (!isAuthenticated) {
         setLoading(false);
       }
     };
 
     processInvitation();
-  }, [isAuthenticated, authToken, user, navigate, accepting]);
+  }, [isAuthenticated, authToken, user, navigate]);
 
   const handleResidentSignup = () => {
     const pendingToken = sessionStorage.getItem("pendingInvitationToken");
@@ -118,11 +123,11 @@ export default function AcceptInvitation() {
           <div style={{ fontSize: "48px", marginBottom: "16px" }}>🏠</div>
           <h2 style={{ color: "#333", marginBottom: "16px" }}>You've Been Invited!</h2>
           <p style={{ fontSize: "14px", color: "#666", marginBottom: "20px", lineHeight: 1.6 }}>
-            Someone has invited you to join their smart home. 
+            Someone has invited you to join their smart home.
             To accept this invitation, please create an account or login with the email address where you received this invitation.
           </p>
-          
-          <button 
+
+          <button
             onClick={handleResidentSignup}
             style={{
               display: "block",
@@ -140,8 +145,8 @@ export default function AcceptInvitation() {
           >
             Create New Account
           </button>
-          
-          <button 
+
+          <button
             onClick={handleLoginRedirect}
             style={{
               display: "block",
@@ -158,7 +163,7 @@ export default function AcceptInvitation() {
           >
             Login to Existing Account
           </button>
-          
+
           <p style={{ fontSize: "12px", color: "#999", marginTop: "20px" }}>
             Make sure to use the same email address where you received this invitation.
           </p>
@@ -194,9 +199,9 @@ export default function AcceptInvitation() {
         <div style={{ background: "white", padding: "40px", borderRadius: "16px", maxWidth: "500px", textAlign: "center", boxShadow: "0 4px 20px rgba(0,0,0,0.1)" }}>
           <div style={{ fontSize: "48px", marginBottom: "16px" }}>❌</div>
           <h2 style={{ color: "#c03030", marginBottom: "16px" }}>Cannot Accept Invitation</h2>
-          <div style={{ 
-            color: "#c03030", 
-            fontSize: "14px", 
+          <div style={{
+            color: "#c03030",
+            fontSize: "14px",
             marginBottom: "20px",
             background: "#fee",
             padding: "16px",
@@ -206,13 +211,14 @@ export default function AcceptInvitation() {
           }}>
             {error}
           </div>
-          
+
           {error.includes("different email address") && (
-            <button 
+            <button
               onClick={() => {
-                localStorage.removeItem("token");
-                sessionStorage.setItem("pendingInvitationToken", token);
-                window.location.href = "/login";
+                const pendingToken = sessionStorage.getItem("pendingInvitationToken") || token;
+                logout(); // clear auth context properly
+                sessionStorage.setItem("pendingInvitationToken", pendingToken);
+                window.location.href = `${window.location.origin}/login?redirect=${encodeURIComponent(`/accept-invitation?token=${pendingToken}`)}`;
               }}
               style={{
                 display: "block",
@@ -231,7 +237,7 @@ export default function AcceptInvitation() {
               Logout & Switch Account
             </button>
           )}
-          
+
           <Link to="/" style={{
             display: "inline-block",
             padding: "12px 24px",
@@ -258,9 +264,9 @@ export default function AcceptInvitation() {
             You have successfully joined the home!
           </p>
           {homeInfo && (
-            <div style={{ 
-              background: "#e8f5ee", 
-              padding: "16px", 
+            <div style={{
+              background: "#e8f5ee",
+              padding: "16px",
               borderRadius: "8px",
               marginTop: "16px"
             }}>
@@ -282,5 +288,22 @@ export default function AcceptInvitation() {
     );
   }
 
-  return null;
+  return (
+    <div style={{
+      minHeight: "100vh", display: "flex", alignItems: "center",
+      justifyContent: "center", background: "#f5f5f5"
+    }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{
+          width: "40px", height: "40px",
+          border: "4px solid #f3f3f3",
+          borderTop: "4px solid #2e8b57",
+          borderRadius: "50%",
+          animation: "spin 1s linear infinite",
+          margin: "20px auto"
+        }}></div>
+        <p style={{ color: "#666" }}>Processing...</p>
+      </div>
+    </div>
+  );
 }

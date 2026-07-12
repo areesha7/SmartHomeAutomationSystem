@@ -18,34 +18,43 @@ export default function Signup() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
+
+
+  useEffect(() => {
+    const pendingToken = sessionStorage.getItem("pendingInvitationToken");
+    if (pendingToken) {
+      navigate(`/signup-resident?token=${pendingToken}`);
+    }
+  }, []);
+
   useEffect(() => {
     if (window.googleInitialized) return;
-    
+
     const script = document.createElement('script');
     script.src = 'https://accounts.google.com/gsi/client';
     script.async = true;
     script.defer = true;
     script.onload = () => {
       window.googleInitialized = true;
-      
+
       window.google.accounts.id.initialize({
         client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
         callback: handleGoogleResponse,
         auto_select: false,
         cancel_on_tap_outside: true,
       });
-      
+
       window.google.accounts.id.renderButton(
         document.getElementById("googleSignUpButton"),
-        { 
-          theme: "outline", 
+        {
+          theme: "outline",
           size: "large",
           text: "signup_with",
           shape: "rectangular"
         }
       );
     };
-    
+
     document.head.appendChild(script);
   }, []);
 
@@ -53,16 +62,16 @@ export default function Signup() {
     try {
       setGoogleLoading(true);
       setError("");
-      
+
       const res = await axios.post(`${API_URL}/auth/google`, {
         idToken: response.credential,
         role: "ADMIN"
       });
-      
+
       const { user, tokens } = res.data.data;
-      
+
       login(user, tokens.accessToken);
-      
+
       navigate("/create-home");
     } catch (err) {
       const message = err.response?.data?.message || "Google signup failed. Please try again.";
@@ -157,15 +166,15 @@ export default function Signup() {
               ───── or ─────
             </div>
 
-            <div 
-              id="googleSignUpButton" 
-              style={{ 
-                display: "flex", 
+            <div
+              id="googleSignUpButton"
+              style={{
+                display: "flex",
                 justifyContent: "center",
                 width: "100%"
               }}
             ></div>
-            
+
             {googleLoading && (
               <p style={{ textAlign: "center", fontSize: "12px", marginTop: "10px", color: "#63a17f" }}>
                 Signing up...
