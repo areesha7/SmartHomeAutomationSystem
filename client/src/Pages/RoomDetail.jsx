@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
-const BASE_URL = "http://localhost:5000";
+const BASE_URL = "https://smarthomeautomation-backend.onrender.com";
 
 const apiFetch = async (path, token, options = {}) => {
   const storedToken = token || localStorage.getItem("token");
