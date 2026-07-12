@@ -1,248 +1,382 @@
-import React from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import Layout from "../Components/Layout";
-
-/* Import icons from lucide-react */
 import {
-  Thermometer,
-  Droplets,
-  ArrowLeft,
-  Sofa,
-  ChefHat,
-  Bed,
-  Bath,
-  Briefcase,
-  Car
+  Sofa, ChefHat, Bed, Bath, Briefcase, Car,
+  Home, RotateCcw, Wifi, WifiOff, Plus, X, Trash2, AlertTriangle
 } from "lucide-react";
+import Layout from "../Components/Layout";
+import { useAuth } from "../context/AuthContext";
 
+const BASE_URL = "http://localhost:5000";
 
-/* =====================================================
+const apiFetch = async (path, token, options = {}) => {
+  const storedToken = token || localStorage.getItem("token");
+  if (!storedToken) throw new Error("No auth token");
+  const res = await fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${storedToken}`,
+      ...(options.headers || {}),
+    },
+  });
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  if (res.status === 204) return null;
+  return res.json();
+};
+
+/* 
    FACTORY PATTERN
-   -----------------------------------------------------
-   This class is responsible for creating room objects.
-   Instead of manually writing every room object,
-   we call the factory to generate them.
-
-   Benefit:
-   - Centralized object creation
-   - Easy to add new room types
-   - Cleaner component code
-===================================================== */
+   RoomFactory.fromBackend() maps raw backend room
+   to consistent UI shape. Picks icon from room name.
+ */
+const iconMap = {
+  living: Sofa, kitchen: ChefHat, bedroom: Bed,
+  bathroom: Bath, office: Briefcase, garage: Car,
+  dining: Sofa, guest: Bed, balcony: Car, laundry: Bath,
+};
 
 class RoomFactory {
-
-  /* Static method that returns a room object */
-  static createRoom(id, type, temperature, humidity, devices) {
-
-    /* Map each room type to an icon */
-    const iconMap = {
-      living: Sofa,
-      kitchen: ChefHat,
-      bedroom: Bed,
-      bathroom: Bath,
-      office: Briefcase,
-      garage: Car,
-      dining: Sofa,
-      guest: Bed,
-      balcony: Car,
-      laundry: Bath
-    };
-
-    /* Map each type to its display name */
-    const nameMap = {
-      living: "Living Room",
-      kitchen: "Kitchen",
-      bedroom: "Bedroom",
-      bathroom: "Bathroom",
-      office: "Home Office",
-      garage: "Garage",
-      dining: "Dining Room",
-      guest: "Guest Room",
-      balcony: "Balcony",
-      laundry: "Laundry Room"
-    };
-
-    /* Return the room object */
+  static fromBackend(room) {
+    const nameLower = (room.name || "").toLowerCase();
+    const iconKey   = Object.keys(iconMap).find(k => nameLower.includes(k)) || null;
     return {
-      id,
-      name: nameMap[type],
-      icon: iconMap[type],
-      temperature,
-      humidity,
-      devices
+      id:          room.id || room._id,
+      name:        room.name,
+      description: room.description || null,
+      deviceCount: room.deviceCount ?? 0,
+      icon:        iconKey ? iconMap[iconKey] : Home,
     };
   }
 }
 
+const StatusPill = ({ online, loading }) => (
+  <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "600", background: loading ? "#f0f0f0" : online ? "#e8f5ee" : "#fdecea", color: loading ? "#888" : online ? "#63a17f" : "#c03030" }}>
+    {loading ? <RotateCcw size={10} style={{ animation: "spin 1s linear infinite" }} /> : online ? <Wifi size={10} /> : <WifiOff size={10} />}
+    {loading ? "Loading..." : online ? "Live" : "Offline"}
+  </span>
+);
 
-/* =====================================================
-   ROOM DATA
-   -----------------------------------------------------
-   Instead of writing objects manually,
-   we create them using RoomFactory.
-===================================================== */
-
-const rooms = [
-  RoomFactory.createRoom("1","living","23°C","45%",8),
-  RoomFactory.createRoom("2","kitchen","22°C","50%",6),
-  RoomFactory.createRoom("3","bedroom","21°C","42%",5),
-  RoomFactory.createRoom("4","bathroom","24°C","60%",3),
-  RoomFactory.createRoom("5","office","22°C","40%",4),
-  RoomFactory.createRoom("6","garage","19°C","55%",2),
-  RoomFactory.createRoom("7","dining","23°C","48%",4),
-  RoomFactory.createRoom("8","guest","22°C","43%",3),
-  RoomFactory.createRoom("9","balcony","26°C","65%",2),
-  RoomFactory.createRoom("10","laundry","24°C","58%",3),
-];
-
-
-/* =====================================================
-   ROOMS COMPONENT
-===================================================== */
+const Overlay = ({ onClick }) => (
+  <div onClick={onClick} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000 }} />
+);
 
 const Rooms = () => {
+  const navigate        = useNavigate();
+  const { token, user } = useAuth();
 
-  /* React Router hook used for navigation */
-  const navigate = useNavigate();
+  const isAdmin = user?.role === "ADMIN";
+
+  const [homeId,   setHomeId]   = useState(null);
+  const [rooms,    setRooms]    = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [online,   setOnline]   = useState(false);
+
+  // Add room 
+  const [showModal,  setShowModal]  = useState(false);
+  const [formName,   setFormName]   = useState("");
+  const [formDesc,   setFormDesc]   = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [formError,  setFormError]  = useState("");
+
+  // Delete 
+  const [roomToDelete,  setRoomToDelete]  = useState(null); // { id, name }
+  const [deleting,      setDeleting]      = useState(false);
+  const [deleteError,   setDeleteError]   = useState("");
+
+
+  const fetchHomeId = useCallback(async () => {
+    const t = token || localStorage.getItem("token");
+    if (!t) return null;
+    try {
+      const data = await apiFetch("/homes/mine", t);
+      const home = data?.data?.home || data?.home;
+      const id   = home?.id || home?._id;
+      setHomeId(id);
+      return id;
+    } catch { return null; }
+  }, [token]);
+
+
+  const fetchRooms = useCallback(async (id) => {
+    if (!id) { setLoading(false); return; }
+    setLoading(true);
+    const t = token || localStorage.getItem("token");
+    try {
+      const data = await apiFetch(`/rooms/${id}/rooms`, t);
+      const list = data?.data?.rooms || data?.rooms || [];
+      setRooms(list.map(r => RoomFactory.fromBackend(r)));
+      setOnline(true);
+    } catch {
+      setOnline(false);
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    const t = token || localStorage.getItem("token");
+    if (!t) return;
+    const boot = async () => {
+      const id = await fetchHomeId();
+      await fetchRooms(id);
+    };
+    boot();
+  }, [token]);
+
+  const handleAddRoom = async () => {
+    setFormError("");
+    if (!formName.trim()) { setFormError("Room name is required."); return; }
+    if (!homeId)          { setFormError("Could not find your home. Try refreshing."); return; }
+    setSubmitting(true);
+    const t = token || localStorage.getItem("token");
+    try {
+      const data = await apiFetch(`/rooms/${homeId}/rooms`, t, {
+        method: "POST",
+        body:   JSON.stringify({ name: formName.trim(), description: formDesc.trim() || undefined }),
+      });
+      const newRoom = data?.data?.room || data?.room;
+      if (newRoom) setRooms(prev => [...prev, RoomFactory.fromBackend(newRoom)]);
+      setShowModal(false);
+      setFormName("");
+      setFormDesc("");
+    } catch (err) {
+      setFormError(err.message.includes("409") ? "A room with this name already exists." : "Failed to create room. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteRoom = async () => {
+    if (!roomToDelete || !homeId) return;
+    setDeleteError("");
+    setDeleting(true);
+    const t = token || localStorage.getItem("token");
+    try {
+      await apiFetch(`/rooms/${homeId}/rooms/${roomToDelete.id}`, t, { method: "DELETE" });
+      
+      setRooms(prev => prev.filter(r => r.id !== roomToDelete.id));
+      setRoomToDelete(null);
+    } catch (err) {
+      setDeleteError(
+        err.message.includes("404") ? "Room not found. It may have already been deleted." :
+        err.message.includes("403") ? "You don't have permission to delete this room." :
+        "Failed to delete room. Try again."
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+
+  const inputStyle = { width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1.5px solid #e0dcea", fontSize: "14px", outline: "none", color: "#1a1a1a", background: "white", boxSizing: "border-box" };
+  const modalBox   = { position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "white", borderRadius: "16px", boxShadow: "0 20px 60px rgba(0,0,0,0.20)", padding: "28px", width: "min(460px,90vw)", zIndex: 1001 };
 
   return (
     <Layout>
-    <div className="rooms-wrapper">
-
-      {/* ================= NAVBAR ================= */}
-      <nav className="navbar shadow-sm" style={{ backgroundColor: "#63a17f" }}>
-        <div className="container-fluid d-flex align-items-center">
-
-          {/* Back Button */}
-          <button
-            className="btn text-white d-flex align-items-center"
-            onClick={() => navigate("/dashboard")}
-            style={{ background: "transparent", border: "none", gap: "8px" }}
-          >
-            {/* Arrow icon */}
-            <ArrowLeft size={22} />
-
-            {/* Page title */}
-            <span style={{ fontWeight: 600 }}>Your Rooms</span>
-          </button>
-
-        </div>
-      </nav>
-
-
-      {/* ================= ROOMS GRID ================= */}
-      <div className="p-4">
-        <div className="row">
-
-          {/* Loop through rooms array */}
-          {rooms.map((room) => {
-
-            /* Extract icon component from room object */
-            const Icon = room.icon;
-
-            return (
-
-              /* Bootstrap grid column */
-              <div key={room.id} className="col-md-4 col-sm-6 mb-4">
-
-                {/* Room Card */}
-                <div
-                  className="room-card p-4"
-
-                  /* Navigate to room details page */
-                  onClick={() => navigate(`/rooms/${room.id}`)}
-                >
-
-                  {/* ===== TOP SECTION ===== */}
-                  <div className="d-flex align-items-center gap-3 mb-3">
-
-                    {/* Room icon container */}
-                    <div className="room-icon">
-
-                      {/* Render dynamic icon */}
-                      <Icon size={26} color="#63a17f" />
-
-                    </div>
-
-                    {/* Room information */}
-                    <div>
-
-                      {/* Room name */}
-                      <h5 className="mb-1 fw-bold">{room.name}</h5>
-
-                      {/* Number of devices */}
-                      <p className="text-muted small mb-0">
-                        {room.devices} devices
-                      </p>
-
-                    </div>
-                  </div>
-
-
-                  {/* ===== TEMPERATURE & HUMIDITY ===== */}
-                  <div className="d-flex justify-content-between text-muted small">
-
-                    {/* Temperature */}
-                    <span className="d-flex align-items-center gap-1">
-                      <Thermometer size={16} />
-                      {room.temperature}
-                    </span>
-
-                    {/* Humidity */}
-                    <span className="d-flex align-items-center gap-1">
-                      <Droplets size={16} />
-                      {room.humidity}
-                    </span>
-
-                  </div>
-
-                </div>
-              </div>
-            );
-          })}
-
-        </div>
-      </div>
-
-
-      {/* ================= STYLES ================= */}
-      <style jsx>{`
-
-        .rooms-wrapper {
-          min-height: 100vh;
-          background: linear-gradient(135deg,#f8f9fa,#eef3f7);
-        }
-
-        .room-card {
-          background: white;
-          border-radius: 14px;
-          box-shadow: 0 6px 15px rgba(0,0,0,0.06);
-          cursor: pointer;
-          transition: all 0.3s ease;
-        }
-
-        .room-card:hover {
-          transform: translateY(-5px);
-          box-shadow: 0 12px 28px rgba(0,0,0,0.12);
-        }
-
-        .room-icon {
-          width: 50px;
-          height: 50px;
-          background: #e7f3ee;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        h5 {
-          font-size: 1.1rem;
-        }
-
+      <style>{`
+        .room-card { background: white; border-radius: 14px; padding: 20px; box-shadow: 0 6px 15px rgba(0,0,0,0.06); cursor: pointer; transition: transform 0.3s ease, box-shadow 0.3s ease; border: 1px solid #f0eef8; }
+        .room-card:hover { transform: translateY(-5px); box-shadow: 0 12px 28px rgba(0,0,0,0.12); }
+        .delete-btn { opacity: 0; transition: opacity 0.2s ease; }
+        .room-card:hover .delete-btn { opacity: 1; }
+        @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
       `}</style>
 
-    </div>
+      <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #f8f9fa, #eef3f7)", padding: "24px" }}>
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "28px", flexWrap: "wrap", gap: "12px" }}>
+          <div>
+            <h2 style={{ margin: "0 0 4px", fontWeight: "800", fontSize: "22px", color: "#1a1a1a" }}>Rooms</h2>
+            <p style={{ margin: 0, fontSize: "14px", color: "#777" }}>Manage and monitor every room in your home</p>
+          </div>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <StatusPill online={online} loading={loading} />
+            {isAdmin && (
+              <button
+                onClick={() => { setShowModal(true); setFormError(""); }}
+                style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "10px", border: "none", background: "#63a17f", color: "white", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}>
+                <Plus size={16} /> Add Room
+              </button>
+            )}
+          </div>
+        </div>
+
+      
+        {loading && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "60px", color: "#aaa", gap: "10px", fontSize: "14px" }}>
+            <RotateCcw size={18} style={{ animation: "spin 1s linear infinite" }} /> Loading rooms...
+          </div>
+        )}
+
+        {!loading && rooms.length === 0 && (
+          <div style={{ textAlign: "center", padding: "60px", color: "#bbb", fontSize: "14px", background: "white", borderRadius: "14px", boxShadow: "0 6px 15px rgba(0,0,0,0.06)" }}>
+            <Home size={40} color="#e0dcea" strokeWidth={1.5} style={{ marginBottom: "12px", display: "block", margin: "0 auto 12px" }} />
+            <p style={{ margin: "0 0 4px", fontWeight: "600", fontSize: "15px", color: "#aaa" }}>
+              {online ? "No rooms yet" : "Could not load rooms"}
+            </p>
+            <p style={{ margin: 0, fontSize: "13px" }}>
+              {online && isAdmin ? 'Click "Add Room" to create your first room.' : online ? "Ask your admin to add rooms." : "Check your connection and try again."}
+            </p>
+          </div>
+        )}
+
+        {!loading && rooms.length > 0 && (
+          <div className="row g-3">
+            {rooms.map(room => {
+              const Icon = room.icon;
+              return (
+                <div key={room.id} className="col-md-4 col-sm-6">
+                  <div className="room-card" style={{ position: "relative" }} onClick={() => navigate(`/rooms/${room.id}`)}>
+
+                    {/* ── Delete button (ADMIN only, appears on hover) ── */}
+                    {isAdmin && (
+                      <button
+                        className="delete-btn"
+                        onClick={e => {
+                          e.stopPropagation(); // prevent navigating into the room
+                          setDeleteError("");
+                          setRoomToDelete({ id: room.id, name: room.name });
+                        }}
+                        title="Delete room"
+                        style={{
+                          position: "absolute", top: "12px", right: "12px",
+                          background: "#fef2f2", border: "1px solid #fdd",
+                          borderRadius: "8px", padding: "5px 7px",
+                          cursor: "pointer", display: "flex", alignItems: "center",
+                          zIndex: 1,
+                        }}>
+                        <Trash2 size={14} color="#c03030" />
+                      </button>
+                    )}
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "14px" }}>
+                      <div style={{ width: "54px", height: "54px", background: "#e7f3ee", borderRadius: "13px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <Icon size={26} color="#63a17f" />
+                      </div>
+                      <div>
+                        <h5 style={{ margin: "0 0 3px", fontWeight: "700", fontSize: "16px", color: "#1a1a1a" }}>{room.name}</h5>
+                        <p style={{ margin: 0, fontSize: "12px", color: "#888" }}>
+                          {room.deviceCount} device{room.deviceCount !== 1 ? "s" : ""}
+                        </p>
+                      </div>
+                    </div>
+                    {room.description && (
+                      <p style={{ margin: "0 0 12px", fontSize: "12px", color: "#aaa", lineHeight: 1.5 }}>{room.description}</p>
+                    )}
+                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                      <span style={{ fontSize: "11px", color: "#63a17f", fontWeight: "600", background: "#e8f5ee", padding: "3px 10px", borderRadius: "10px" }}>
+                        View Room →
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {showModal && (
+        <>
+          <Overlay onClick={() => setShowModal(false)} />
+          <div style={modalBox}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h5 style={{ margin: 0, fontWeight: "700", fontSize: "17px", color: "#1a1a1a" }}>Add New Room</h5>
+              <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", cursor: "pointer" }}>
+                <X size={20} color="#888" />
+              </button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div>
+                <p style={{ margin: "0 0 6px", fontSize: "13px", fontWeight: "600", color: "#444" }}>Room Name *</p>
+                <input style={inputStyle} placeholder="e.g. Living Room"
+                  value={formName} onChange={e => setFormName(e.target.value)} />
+              </div>
+              <div>
+                <p style={{ margin: "0 0 6px", fontSize: "13px", fontWeight: "600", color: "#444" }}>Description <span style={{ color: "#aaa", fontWeight: "400" }}>(optional)</span></p>
+                <input style={inputStyle} placeholder="e.g. Main living area on ground floor"
+                  value={formDesc} onChange={e => setFormDesc(e.target.value)} />
+              </div>
+              {formError && (
+                <div style={{ padding: "10px 14px", background: "#fef2f2", borderRadius: "8px", border: "1px solid #fdd", fontSize: "13px", color: "#c03030" }}>
+                  {formError}
+                </div>
+              )}
+              <div style={{ padding: "10px 14px", background: "#f0faf4", borderRadius: "8px", border: "1px solid #c2e0cf", fontSize: "12px", color: "#63a17f" }}>
+                After creating the room, open it to add devices.
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", marginTop: "24px", justifyContent: "flex-end" }}>
+              <button onClick={() => setShowModal(false)}
+                style={{ background: "#f0f0f0", color: "#555", border: "none", borderRadius: "8px", padding: "10px 20px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+                Cancel
+              </button>
+              <button onClick={handleAddRoom} disabled={submitting}
+                style={{ background: submitting ? "#aaa" : "#63a17f", color: "white", border: "none", borderRadius: "8px", padding: "10px 20px", fontSize: "14px", fontWeight: "600", cursor: submitting ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                {submitting ? <><RotateCcw size={13} style={{ animation: "spin 1s linear infinite" }} /> Creating...</> : "Create Room"}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Delete Confirmation Modal ──────────────────────────────────── */}
+      {roomToDelete && (
+        <>
+          <Overlay onClick={() => { if (!deleting) setRoomToDelete(null); }} />
+          <div style={modalBox}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#fef2f2", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <AlertTriangle size={18} color="#c03030" />
+                </div>
+                <h5 style={{ margin: 0, fontWeight: "700", fontSize: "17px", color: "#1a1a1a" }}>Delete Room</h5>
+              </div>
+              {!deleting && (
+                <button onClick={() => setRoomToDelete(null)} style={{ background: "none", border: "none", cursor: "pointer" }}>
+                  <X size={20} color="#888" />
+                </button>
+              )}
+            </div>
+
+            <div style={{ marginBottom: "20px" }}>
+              <p style={{ margin: "0 0 12px", fontSize: "14px", color: "#444", lineHeight: 1.6 }}>
+                Are you sure you want to delete <strong style={{ color: "#1a1a1a" }}>"{roomToDelete.name}"</strong>?
+                This action cannot be undone.
+              </p>
+              <div style={{ padding: "10px 14px", background: "#fff8e1", borderRadius: "8px", border: "1px solid #ffe082", fontSize: "12px", color: "#b45309" }}>
+                ⚠️ All devices assigned to this room may be affected.
+              </div>
+            </div>
+
+            {deleteError && (
+              <div style={{ padding: "10px 14px", background: "#fef2f2", borderRadius: "8px", border: "1px solid #fdd", fontSize: "13px", color: "#c03030", marginBottom: "16px" }}>
+                {deleteError}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setRoomToDelete(null)}
+                disabled={deleting}
+                style={{ background: "#f0f0f0", color: "#555", border: "none", borderRadius: "8px", padding: "10px 20px", fontSize: "14px", fontWeight: "600", cursor: deleting ? "not-allowed" : "pointer", opacity: deleting ? 0.6 : 1 }}>
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteRoom}
+                disabled={deleting}
+                style={{ background: deleting ? "#aaa" : "#c03030", color: "white", border: "none", borderRadius: "8px", padding: "10px 20px", fontSize: "14px", fontWeight: "600", cursor: deleting ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                {deleting
+                  ? <><RotateCcw size={13} style={{ animation: "spin 1s linear infinite" }} /> Deleting...</>
+                  : <><Trash2 size={14} /> Delete Room</>
+                }
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </Layout>
   );
 };

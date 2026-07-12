@@ -1,154 +1,145 @@
 import React, { useState } from "react";
+import { useNavigate, useLocation, Link } from "react-router-dom";
+import axios from "axios";
 import "../styles/theme.css";
-import { useNavigate } from "react-router-dom";
+import logo from "../assets/logoHomi.jpeg";
+
+const API_URL = import.meta.env.VITE_API_URL;
 
 export default function ResetPassword() {
-
   const navigate = useNavigate();
+  const location = useLocation();
+  const email = location.state?.email || "";
+  const code = location.state?.code || "";
 
-  const [step, setStep] = useState(1);
-  const [email, setEmail] = useState("");
-  const [code, setCode] = useState(["","","","","",""]);
-  const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const dummyCode = "123456";
-
-  const handleCodeChange = (value, index) => {
-    if (!/^[0-9]?$/.test(value)) return;
-
-    const newCode = [...code];
-    newCode[index] = value;
-    setCode(newCode);
-
-    if(value && index < 5){
-      document.getElementById(`code-${index+1}`).focus();
-    }
-  };
-
-  const sendLink = () => {
-    if(!email){
-      alert("Enter email first");
+  const handleResetPassword = async () => {
+    if (!newPassword || !confirmPassword) {
+      setError("Please fill in both password fields.");
       return;
     }
 
-    alert("Dummy verification code: 123456");
-    setStep(2);
-  };
-
-  const verifyCode = () => {
-    if(code.join("") === dummyCode){
-      setStep(3);
-    } else {
-      alert("Incorrect code");
-    }
-  };
-
-  const changePassword = () => {
-
-    if(password !== confirmPassword){
-      alert("Passwords do not match");
+    if (newPassword.length < 6) {
+      setError("Password must be at least 6 characters long.");
       return;
     }
 
-    alert("Password updated successfully");
-    navigate("/login");
+    if (newPassword !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    if (!email || !code) {
+      setError("Invalid reset session. Please start over.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+      setSuccess("");
+
+      const response = await axios.post(`${API_URL}/auth/reset-password`, {
+        email,
+        newPassword
+      });
+
+      setSuccess("Password reset successfully! Redirecting to login...");
+
+      setTimeout(() => {
+        navigate("/login");
+      }, 2000);
+
+    } catch (err) {
+      const message = err.response?.data?.message || "Failed to reset password. Please try again.";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  if (!email) {
+    return (
+      <div className="auth-page">
+        <div className="form-container">
+          <div className="form-left">
+            <img src={logo} alt="logo" />
+          </div>
+          <div className="form-right">
+            <div className="form-card">
+              <h2>Reset Password</h2>
+              <p style={{ color: "red", marginBottom: "20px" }}>
+                Invalid reset session. Please start over.
+              </p>
+              <Link to="/forgot-password" className="button-primary" style={{ textDecoration: "none", display: "inline-block", textAlign: "center" }}>
+                Start Over
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="auth-page">
       <div className="form-container">
 
-        {/* Left Logo */}
         <div className="form-left">
-          <img src="/logo.png" alt="logo" />
+          <img src={logo} alt="logo" />
         </div>
 
-        {/* Right Form */}
         <div className="form-right">
           <div className="form-card">
+            <h2>Reset Password</h2>
+            
+            <p style={{ fontSize: "13px", color: "#666", marginBottom: "20px" }}>
+              Create a new password for <strong>{email}</strong>
+            </p>
 
-            {/* STEP 1 EMAIL */}
-            {step === 1 && (
-              <>
-                <h2>Reset Password</h2>
-
-                <input
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e)=>setEmail(e.target.value)}
-                />
-
-                <button className="button-primary" onClick={sendLink}>
-                  Send Code
-                </button>
-              </>
+            {error && (
+              <p style={{ color: "red", fontSize: "13px", marginBottom: "10px" }}>
+                {error}
+              </p>
             )}
 
-            {/* STEP 2 VERIFICATION CODE */}
-            {step === 2 && (
-              <>
-                <h2>Enter Verification Code</h2>
-
-                <div style={{
-                  display:"flex",
-                  justifyContent:"center",
-                  gap:"8px",
-                  margin:"15px 0"
-                }}>
-
-                  {code.map((digit,index)=>(
-                    <input
-                      key={index}
-                      id={`code-${index}`}
-                      value={digit}
-                      maxLength="1"
-                      onChange={(e)=>handleCodeChange(e.target.value,index)}
-                      style={{
-                        width:"40px",
-                        height:"40px",
-                        textAlign:"center",
-                        fontSize:"18px",
-                        borderRadius:"8px",
-                        border:"1px solid #ccc"
-                      }}
-                    />
-                  ))}
-
-                </div>
-
-                <button className="button-primary" onClick={verifyCode}>
-                  Verify Code
-                </button>
-              </>
+            {success && (
+              <p style={{ color: "#63a17f", fontSize: "13px", marginBottom: "10px" }}>
+                {success}
+              </p>
             )}
 
-            {/* STEP 3 NEW PASSWORD */}
-            {step === 3 && (
-              <>
-                <h2>Create New Password</h2>
+            <input
+              type="password"
+              placeholder="New Password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
 
-                <input
-                  type="password"
-                  placeholder="New Password"
-                  value={password}
-                  onChange={(e)=>setPassword(e.target.value)}
-                />
+            <input
+              type="password"
+              placeholder="Confirm New Password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleResetPassword()}
+            />
 
-                <input
-                  type="password"
-                  placeholder="Re-enter Password"
-                  value={confirmPassword}
-                  onChange={(e)=>setConfirmPassword(e.target.value)}
-                />
+            <button
+              className="button-primary"
+              onClick={handleResetPassword}
+              disabled={loading}
+            >
+              {loading ? "Resetting..." : "Reset Password"}
+            </button>
 
-                <button className="button-primary" onClick={changePassword}>
-                  Change Password
-                </button>
-              </>
-            )}
-
+            <div className="form-links">
+              <Link to="/login">Back to Login</Link>
+            </div>
           </div>
         </div>
 
